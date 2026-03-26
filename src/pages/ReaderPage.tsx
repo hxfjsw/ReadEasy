@@ -1199,6 +1199,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           onClose={() => setPopupVisible(false)}
           onPlayPronunciation={playPronunciation}
           mode="sidebar"
+          bookName={fileName}
         />
       </div>
 

@@ -10,6 +10,7 @@ interface WordPopupProps {
   onClose: () => void;
   onPlayPronunciation?: (word: string) => void;
   mode?: 'modal' | 'sidebar';
+  bookName?: string; // 当前书籍名称，用于自动创建单词本
 }
 
 const WordPopup: React.FC<WordPopupProps> = ({ 
@@ -18,7 +19,8 @@ const WordPopup: React.FC<WordPopupProps> = ({
   visible, 
   onClose, 
   onPlayPronunciation,
-  mode = 'modal'
+  mode = 'modal',
+  bookName
 }) => {
   const [loading, setLoading] = useState(false);
   const [definition, setDefinition] = useState<WordDefinition | null>(null);
@@ -126,8 +128,8 @@ const WordPopup: React.FC<WordPopupProps> = ({
       if (result.success) {
         setDefinition(result.data);
         setSource('ai');
-        // 自动保存到默认单词本
-        await autoSaveToDefaultBook(result.data);
+        // 自动保存到以书名命名的单词本
+        await autoSaveToBookByName(result.data);
       } else {
         message.error('获取单词定义失败: ' + (result.message || result.error || '未知错误'));
       }
@@ -138,17 +140,38 @@ const WordPopup: React.FC<WordPopupProps> = ({
     }
   };
 
-  // 自动保存到默认单词本
-  const autoSaveToDefaultBook = async (def: WordDefinition) => {
+  // 自动保存到以书名命名的单词本（没有则创建）
+  const autoSaveToBookByName = async (def: WordDefinition) => {
+    if (!bookName) {
+      console.log('没有书名，跳过自动保存');
+      return;
+    }
+    
     try {
+      // 1. 查找是否已存在该书名的单词本
       const books = await window.electron.ipcRenderer.invoke('db:getWordBooks');
-      if (!books || books.length === 0) {
-        console.log('没有可用的单词本，跳过自动保存');
+      let targetBook = books.find((b: WordBook) => b.name === bookName);
+      
+      // 2. 不存在则创建
+      if (!targetBook) {
+        console.log(`创建新单词本: ${bookName}`);
+        const result = await window.electron.ipcRenderer.invoke('db:addWordBook', {
+          name: bookName,
+          description: `《${bookName}》阅读时自动收藏的单词`,
+        });
+        if (result && result.success) {
+          // 重新获取单词本列表
+          const updatedBooks = await window.electron.ipcRenderer.invoke('db:getWordBooks');
+          targetBook = updatedBooks.find((b: WordBook) => b.name === bookName);
+        }
+      }
+      
+      if (!targetBook) {
+        console.error('创建单词本失败');
         return;
       }
       
-      const defaultBookId = books[0].id;
-      
+      // 3. 添加单词到单词本
       const wordResult = await window.electron.ipcRenderer.invoke('db:addWord', {
         word: def.word,
         phoneticUk: def.phoneticUk,
@@ -164,13 +187,13 @@ const WordPopup: React.FC<WordPopupProps> = ({
 
       if (wordResult && wordResult.success) {
         await window.electron.ipcRenderer.invoke('db:addWordToBook', 
-          defaultBookId, 
+          targetBook.id, 
           wordResult.id,
           context,
           def.contextAnalysis,
           def.contextTranslation
         );
-        message.success(`已自动保存到"${books[0].name}"`);
+        message.success(`已自动保存到"${targetBook.name}"`);
       }
     } catch (error) {
       console.error('自动保存失败:', error);
