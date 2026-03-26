@@ -18,7 +18,7 @@ export interface IPCChannels {
   'db:getWordBooks': () => Promise<any[]>;
   'db:addWordBook': (data: any) => Promise<any>;
   'db:deleteWordBook': (id: number) => Promise<boolean>;
-  'db:addWordToBook': (wordBookId: number, wordId: number, context?: string) => Promise<boolean>;
+  'db:addWordToBook': (wordBookId: number, wordId: number, context?: string, contextAnalysis?: string, contextTranslation?: string) => Promise<boolean>;
   'db:removeWordFromBook': (wordBookId: number, wordId: number) => Promise<boolean>;
   'db:getWordsInBook': (wordBookId: number) => Promise<any[]>;
   'db:updateWordReview': (itemId: number) => Promise<boolean>;

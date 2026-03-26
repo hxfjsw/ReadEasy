@@ -57,7 +57,11 @@ export class DatabaseService {
         level TEXT NOT NULL,
         frequency REAL,
         source TEXT NOT NULL DEFAULT 'local',
-        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        -- 扩展字段：词源和词根词缀
+        etymology TEXT,
+        root_analysis TEXT,
+        related_words TEXT
       )
     `);
 
@@ -140,8 +144,30 @@ export class DatabaseService {
     
     // 迁移：为 ai_configs 添加翻译相关字段
     this.migrateAIConfigs();
+    
+    // 迁移：为 words 表添加扩展字段
+    this.migrateWords();
   }
   
+  private migrateWords(): void {
+    // 检查是否需要添加扩展字段
+    const tableInfo = this.db.prepare(`PRAGMA table_info(words)`).all() as any[];
+    
+    const hasEtymology = tableInfo.some(col => col.name === 'etymology');
+    const hasRootAnalysis = tableInfo.some(col => col.name === 'root_analysis');
+    const hasRelatedWords = tableInfo.some(col => col.name === 'related_words');
+    
+    if (!hasEtymology) {
+      this.db.exec(`ALTER TABLE words ADD COLUMN etymology TEXT`);
+    }
+    if (!hasRootAnalysis) {
+      this.db.exec(`ALTER TABLE words ADD COLUMN root_analysis TEXT`);
+    }
+    if (!hasRelatedWords) {
+      this.db.exec(`ALTER TABLE words ADD COLUMN related_words TEXT`);
+    }
+  }
+
   private migrateAIConfigs(): void {
     // 检查是否需要添加翻译相关字段
     const tableInfo = this.db.prepare(`PRAGMA table_info(ai_configs)`).all() as any[];
@@ -165,11 +191,17 @@ export class DatabaseService {
     // 检查是否需要添加 review_stage 列
     const tableInfo = this.db.prepare(`PRAGMA table_info(word_book_items)`).all() as any[];
     const hasReviewStage = tableInfo.some(col => col.name === 'review_stage');
+    const hasContextAnalysis = tableInfo.some(col => col.name === 'context_analysis');
     
     if (!hasReviewStage) {
       this.db.exec(`ALTER TABLE word_book_items ADD COLUMN review_stage INTEGER NOT NULL DEFAULT 0`);
       this.db.exec(`ALTER TABLE word_book_items ADD COLUMN last_reviewed_at INTEGER`);
       this.db.exec(`ALTER TABLE word_book_items ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0`);
+    }
+    
+    if (!hasContextAnalysis) {
+      this.db.exec(`ALTER TABLE word_book_items ADD COLUMN context_analysis TEXT`);
+      this.db.exec(`ALTER TABLE word_book_items ADD COLUMN context_translation TEXT`);
     }
   }
 
@@ -254,8 +286,8 @@ export class DatabaseService {
     }
     
     const result = this.db.prepare(`
-      INSERT INTO words (word, phonetic_uk, phonetic_us, definition_cn, definition_en, level, frequency, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO words (word, phonetic_uk, phonetic_us, definition_cn, definition_en, level, frequency, source, etymology, root_analysis, related_words)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       data.word,
       data.phoneticUk || null,
@@ -264,7 +296,10 @@ export class DatabaseService {
       data.definitionEn || null,
       data.level,
       data.frequency || null,
-      data.source || 'local'
+      data.source || 'local',
+      data.etymology || null,
+      data.rootAnalysis ? JSON.stringify(data.rootAnalysis) : null,
+      data.relatedWords ? JSON.stringify(data.relatedWords) : null
     );
     console.log('[DB] addWord success:', data.word, 'id:', result.lastInsertRowid);
     return Number(result.lastInsertRowid);
@@ -301,13 +336,19 @@ export class DatabaseService {
     this.db.prepare('DELETE FROM word_books WHERE id = ?').run(id);
   }
 
-  addWordToBook(wordBookId: number, wordId: number, context?: string): void {
-    console.log('[DB] addWordToBook called:', { wordBookId, wordId, context });
+  addWordToBook(
+    wordBookId: number, 
+    wordId: number, 
+    context?: string,
+    contextAnalysis?: string,
+    contextTranslation?: string
+  ): void {
+    console.log('[DB] addWordToBook called:', { wordBookId, wordId, context, contextAnalysis, contextTranslation });
     try {
       const result = this.db.prepare(`
-        INSERT OR IGNORE INTO word_book_items (word_book_id, word_id, context)
-        VALUES (?, ?, ?)
-      `).run(wordBookId, wordId, context || null);
+        INSERT OR IGNORE INTO word_book_items (word_book_id, word_id, context, context_analysis, context_translation)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(wordBookId, wordId, context || null, contextAnalysis || null, contextTranslation || null);
       console.log('[DB] addWordToBook result:', result);
     } catch (error: any) {
       console.error('[DB] addWordToBook error:', error);
@@ -321,10 +362,22 @@ export class DatabaseService {
     `).run(wordBookId, wordId);
   }
 
-  getWordsInBook(wordBookId: number): (schema.Word & { context?: string; addedAt: Date; reviewStage?: number; lastReviewedAt?: Date; reviewCount?: number })[] {
+  getWordsInBook(wordBookId: number): (schema.Word & { 
+    context?: string; 
+    contextAnalysis?: string;
+    contextTranslation?: string;
+    addedAt: Date; 
+    reviewStage?: number; 
+    lastReviewedAt?: Date; 
+    reviewCount?: number;
+    etymology?: string;
+    rootAnalysis?: any;
+    relatedWords?: any[];
+  })[] {
     console.log('[DB] getWordsInBook called, wordBookId:', wordBookId);
-    const result = this.db.prepare(`
-      SELECT w.*, wbi.context, wbi.added_at as addedAt, 
+    const rows = this.db.prepare(`
+      SELECT w.*, wbi.context, wbi.context_analysis as contextAnalysis, wbi.context_translation as contextTranslation,
+             wbi.added_at as addedAt, 
              wbi.review_stage as reviewStage, wbi.last_reviewed_at as lastReviewedAt, 
              wbi.review_count as reviewCount
       FROM words w
@@ -332,6 +385,14 @@ export class DatabaseService {
       WHERE wbi.word_book_id = ?
       ORDER BY wbi.added_at DESC
     `).all(wordBookId) as any[];
+    
+    // 解析 JSON 字段
+    const result = rows.map(row => ({
+      ...row,
+      rootAnalysis: row.root_analysis ? JSON.parse(row.root_analysis) : undefined,
+      relatedWords: row.related_words ? JSON.parse(row.related_words) : undefined,
+    }));
+    
     console.log('[DB] getWordsInBook result:', result?.length || 0, 'items');
     return result;
   }

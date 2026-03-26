@@ -75,6 +75,10 @@ export interface Word {
   frequency?: number;
   source: string;
   createdAt: Date;
+  // 扩展字段
+  etymology?: string;
+  rootAnalysis?: RootAnalysis;
+  relatedWords?: RelatedWord[];
 }
 
 // 单词本
@@ -89,6 +93,8 @@ export interface WordBook {
 // 单词本中的单词
 export interface WordBookItem extends Word {
   context?: string;
+  contextAnalysis?: string;
+  contextTranslation?: string;
   addedAt: Date;
 }
 

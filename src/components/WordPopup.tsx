@@ -26,6 +26,49 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
     }
   }, [visible, word]);
 
+  // 自动保存到默认单词本
+  const autoSaveToDefaultBook = async (def: WordDefinition) => {
+    try {
+      // 获取单词本列表
+      const books = await window.electron.ipcRenderer.invoke('db:getWordBooks');
+      if (!books || books.length === 0) {
+        console.log('没有可用的单词本，跳过自动保存');
+        return;
+      }
+      
+      // 使用第一个单词本作为默认
+      const defaultBookId = books[0].id;
+      
+      // 先添加单词到数据库
+      const wordResult = await window.electron.ipcRenderer.invoke('db:addWord', {
+        word: def.word,
+        phoneticUk: def.phoneticUk,
+        phoneticUs: def.phoneticUs,
+        definitionCn: def.definitions.map(d => `${d.pos} ${d.meaningCn}`).join('; '),
+        definitionEn: def.definitions.map(d => d.meaningEn).join('; '),
+        level: def.level || 'unknown',
+        source: 'user',
+        etymology: def.etymology,
+        rootAnalysis: def.rootAnalysis,
+        relatedWords: def.relatedWords,
+      });
+
+      if (wordResult && wordResult.success) {
+        // 添加到单词本（包含上下文分析）
+        await window.electron.ipcRenderer.invoke('db:addWordToBook', 
+          defaultBookId, 
+          wordResult.id,
+          context,
+          def.contextAnalysis,
+          def.contextTranslation
+        );
+        message.success(`已自动保存到"${books[0].name}"`);
+      }
+    } catch (error) {
+      console.error('自动保存失败:', error);
+    }
+  };
+
   const fetchDefinition = async () => {
     setLoading(true);
     try {
@@ -35,6 +78,8 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
       });
       if (result.success) {
         setDefinition(result.data);
+        // 自动保存到默认单词本
+        await autoSaveToDefaultBook(result.data);
       } else {
         message.error('获取单词定义失败: ' + (result.message || result.error || '未知错误'));
       }
@@ -70,7 +115,7 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
 
     setAddingToBook(true);
     try {
-      // 先添加单词到数据库
+      // 先添加单词到数据库（包含完整信息）
       const wordResult = await window.electron.ipcRenderer.invoke('db:addWord', {
         word: definition.word,
         phoneticUk: definition.phoneticUk,
@@ -79,14 +124,19 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
         definitionEn: definition.definitions.map(d => d.meaningEn).join('; '),
         level: definition.level || 'unknown',
         source: 'user',
+        etymology: definition.etymology,
+        rootAnalysis: definition.rootAnalysis,
+        relatedWords: definition.relatedWords,
       });
 
-      if (wordResult) {
-        // 添加到单词本
+      if (wordResult && wordResult.success) {
+        // 添加到单词本（包含上下文分析）
         await window.electron.ipcRenderer.invoke('db:addWordToBook', 
           selectedBookId, 
           wordResult.id,
-          context
+          context,
+          definition.contextAnalysis,
+          definition.contextTranslation
         );
         message.success(`已将 "${word}" 添加到单词本`);
         onClose();

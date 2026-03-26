@@ -433,6 +433,72 @@ const WordBookPage: React.FC = () => {
               </div>
             )}
 
+            {/* 词源和词根词缀 */}
+            {(selectedWord.etymology || selectedWord.rootAnalysis) && (
+              <>
+                <Divider />
+                <div className="bg-purple-50 p-3 rounded border-l-4 border-purple-400">
+                  <h4 className="text-purple-600 text-sm mb-2 font-medium">词源与词根词缀</h4>
+                  
+                  {selectedWord.etymology && (
+                    <div className="mb-2 text-gray-700 text-sm">
+                      <span className="font-medium">词源: </span>{selectedWord.etymology}
+                    </div>
+                  )}
+                  
+                  {selectedWord.rootAnalysis && (
+                    <div className="mb-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        {selectedWord.rootAnalysis.prefix && (
+                          <div className="flex items-center">
+                            <span className="text-blue-600 font-bold">{selectedWord.rootAnalysis.prefix.value}</span>
+                            <span className="text-gray-400 mx-1">+</span>
+                          </div>
+                        )}
+                        <div className="flex items-center">
+                          <span className="text-red-600 font-bold">{selectedWord.rootAnalysis.root.value}</span>
+                          {selectedWord.rootAnalysis.root.origin && (
+                            <span className="text-xs text-gray-400 ml-1">({selectedWord.rootAnalysis.root.origin})</span>
+                          )}
+                        </div>
+                        {selectedWord.rootAnalysis.suffix && (
+                          <div className="flex items-center">
+                            <span className="text-gray-400 mx-1">+</span>
+                            <span className="text-green-600 font-bold">{selectedWord.rootAnalysis.suffix.value}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {selectedWord.rootAnalysis.prefix && (
+                          <div>前缀 <strong>{selectedWord.rootAnalysis.prefix.value}</strong>: {selectedWord.rootAnalysis.prefix.meaning}</div>
+                        )}
+                        <div>词根 <strong>{selectedWord.rootAnalysis.root.value}</strong>: {selectedWord.rootAnalysis.root.meaning}</div>
+                        {selectedWord.rootAnalysis.suffix && (
+                          <div>后缀 <strong>{selectedWord.rootAnalysis.suffix.value}</strong>: {selectedWord.rootAnalysis.suffix.meaning}</div>
+                        )}
+                        <div className="mt-1 text-gray-700 italic">{selectedWord.rootAnalysis.explanation}</div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedWord.relatedWords && selectedWord.relatedWords.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-purple-200">
+                      <div className="text-xs text-purple-500 mb-1">相关词汇</div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedWord.relatedWords.map((rw, idx) => (
+                          <div key={idx} className="bg-white px-2 py-1 rounded text-xs">
+                            <span className="font-medium text-gray-800">{rw.word}</span>
+                            <span className="text-gray-400 mx-1">·</span>
+                            <span className="text-gray-500">{rw.meaning}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
             {/* 原文上下文 */}
             {selectedWord.context && (
               <>
@@ -442,6 +508,28 @@ const WordBookPage: React.FC = () => {
                   <p className="text-gray-600 italic bg-gray-50 p-3 rounded">
                     "{selectedWord.context}"
                   </p>
+                </div>
+              </>
+            )}
+
+            {/* 上下文翻译 */}
+            {selectedWord.contextTranslation && (
+              <>
+                <Divider />
+                <div className="bg-blue-50 p-3 rounded border-l-4 border-blue-400">
+                  <h4 className="text-blue-600 text-sm mb-1 font-medium">上下文翻译</h4>
+                  <p className="text-gray-800">{selectedWord.contextTranslation}</p>
+                </div>
+              </>
+            )}
+
+            {/* 上下文分析 */}
+            {selectedWord.contextAnalysis && (
+              <>
+                <Divider />
+                <div className="bg-green-50 p-3 rounded border-l-4 border-green-400">
+                  <h4 className="text-green-600 text-sm mb-1 font-medium">上下文分析</h4>
+                  <p className="text-gray-800 leading-relaxed">{selectedWord.contextAnalysis}</p>
                 </div>
               </>
             )}

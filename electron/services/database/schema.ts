@@ -21,6 +21,10 @@ export const words = sqliteTable('words', {
   frequency: real('frequency'),
   source: text('source').notNull().default('local'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  // 扩展字段
+  etymology: text('etymology'),
+  rootAnalysis: text('root_analysis'),
+  relatedWords: text('related_words'),
 });
 
 // 单词本表
@@ -39,6 +43,9 @@ export const wordBookItems = sqliteTable('word_book_items', {
   wordId: integer('word_id').notNull(),
   context: text('context'),
   addedAt: integer('added_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  // 扩展字段
+  contextAnalysis: text('context_analysis'),
+  contextTranslation: text('context_translation'),
 });
 
 // 阅读记录表
