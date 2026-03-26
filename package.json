@@ -9,6 +9,8 @@
     "electron:dev": "npm run build && electron .",
     "electron:build": "npm run build && electron-builder",
     "electron:build:win": "npm run build && electron-builder --win",
+    "electron:build:mac": "npm run build && electron-builder --mac",
+    "electron:build:linux": "npm run build && electron-builder --linux",
     "postinstall": "electron-builder install-app-deps",
     "db:generate": "drizzle-kit generate:sqlite",
     "db:push": "drizzle-kit push:sqlite"
@@ -78,11 +80,29 @@
       "target": "nsis",
       "icon": "resources/icons/icon.ico"
     },
+    "mac": {
+      "target": "dmg",
+      "icon": "resources/icons/icon.icns",
+      "category": "public.app-category.education"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "icon": "resources/icons",
+      "category": "Education"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
     }
   }
 }

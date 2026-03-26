@@ -18,30 +18,17 @@ export function registerIPCHandlers(
     console.log('[IPC] ===========================================');
     console.log('[IPC] file:open called - START');
     console.log('[IPC] ===========================================');
+    
     try {
       // 获取主窗口
       const allWindows = BrowserWindow.getAllWindows();
       console.log('[IPC] file:open allWindows count:', allWindows.length);
       
-      let parentWindow: BrowserWindow | null = null;
+      // 在 Ubuntu/Linux 上，dialog 可能需要在主进程中同步调用
+      // 尝试不使用父窗口
+      console.log('[IPC] file:open calling dialog.showOpenDialog without parent...');
       
-      if (allWindows.length > 0) {
-        parentWindow = allWindows[0];
-        console.log('[IPC] file:open using first window, id:', parentWindow.id);
-        
-        // 确保窗口是可见和聚焦的
-        if (!parentWindow.isVisible()) {
-          console.log('[IPC] file:open window not visible, showing...');
-          parentWindow.show();
-        }
-        if (!parentWindow.isFocused()) {
-          console.log('[IPC] file:open window not focused, focusing...');
-          parentWindow.focus();
-        }
-      }
-      
-      console.log('[IPC] file:open calling dialog.showOpenDialog...');
-      console.log('[IPC] file:open dialog options:', JSON.stringify({
+      const options: any = {
         properties: ['openFile'],
         filters: [
           { name: 'Ebooks', extensions: ['epub', 'mobi', 'txt'] },
@@ -50,19 +37,17 @@ export function registerIPCHandlers(
           { name: 'Text', extensions: ['txt'] },
           { name: 'All Files', extensions: ['*'] },
         ],
-      }));
+      };
       
-      // 使用同步方式打开对话框，避免异步问题
-      const result = await dialog.showOpenDialog(parentWindow as any, {
-        properties: ['openFile'],
-        filters: [
-          { name: 'Ebooks', extensions: ['epub', 'mobi', 'txt'] },
-          { name: 'EPUB', extensions: ['epub'] },
-          { name: 'MOBI', extensions: ['mobi'] },
-          { name: 'Text', extensions: ['txt'] },
-          { name: 'All Files', extensions: ['*'] },
-        ],
-      });
+      console.log('[IPC] file:open options:', JSON.stringify(options));
+      
+      // 使用 try-catch 包裹，防止卡住
+      const result = await Promise.race([
+        dialog.showOpenDialog(options),
+        new Promise<{ canceled: boolean; filePaths: string[] }>((_, reject) => {
+          setTimeout(() => reject(new Error('Dialog timeout')), 30000);
+        }),
+      ]);
       
       console.log('[IPC] file:open dialog result:', JSON.stringify(result));
       console.log('[IPC] file:open - END');
@@ -70,7 +55,7 @@ export function registerIPCHandlers(
     } catch (error) {
       console.error('[IPC] file:open ERROR:', error);
       console.error('[IPC] file:open stack:', (error as Error).stack);
-      // 返回一个默认结果而不是抛出错误
+      // 返回取消状态而不是抛出错误
       return { canceled: true, filePaths: [] };
     }
   });
