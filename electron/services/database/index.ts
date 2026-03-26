@@ -344,12 +344,32 @@ export class DatabaseService {
   }
 
   // AI配置相关操作
+  
+  // 将数据库的 snake_case 字段映射为 camelCase
+  private mapAIConfigFromDB(row: any): schema.AIConfig {
+    if (!row) return undefined as any;
+    return {
+      id: row.id,
+      provider: row.provider,
+      name: row.name,
+      baseUrl: row.base_url,
+      apiKey: row.api_key,
+      model: row.model,
+      temperature: row.temperature,
+      maxTokens: row.max_tokens,
+      isDefault: row.is_default === 1,
+      createdAt: row.created_at,
+    };
+  }
+
   getAIConfigs(): schema.AIConfig[] {
-    return this.db.prepare('SELECT * FROM ai_configs ORDER BY created_at DESC').all() as schema.AIConfig[];
+    const rows = this.db.prepare('SELECT * FROM ai_configs ORDER BY created_at DESC').all();
+    return rows.map(row => this.mapAIConfigFromDB(row));
   }
 
   getDefaultAIConfig(): schema.AIConfig | undefined {
-    return this.db.prepare('SELECT * FROM ai_configs WHERE is_default = 1 LIMIT 1').get() as schema.AIConfig | undefined;
+    const row = this.db.prepare('SELECT * FROM ai_configs WHERE is_default = 1 LIMIT 1').get();
+    return row ? this.mapAIConfigFromDB(row) : undefined;
   }
 
   addAIConfig(data: schema.NewAIConfig): number {
