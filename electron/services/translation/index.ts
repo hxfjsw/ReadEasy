@@ -160,6 +160,42 @@ export class GoogleTranslationService {
   }
 
   /**
+   * 获取单词定义（用于AI降级的fallback）
+   * 返回格式与 AIService.getWordDefinition 一致
+   */
+  async getWordDefinition(word: string): Promise<{
+    word: string;
+    phoneticUk?: string;
+    phoneticUs?: string;
+    definitions: {
+      pos: string;
+      meaningCn: string;
+      meaningEn: string;
+      examples: string[];
+    }[];
+    level?: string;
+  }> {
+    // 翻译单词到中文
+    const result = await this.translate({
+      text: word,
+      targetLang: 'zh-CN',
+    });
+
+    return {
+      word: word,
+      // Google免费API不提供音标
+      definitions: [
+        {
+          pos: '翻译',
+          meaningCn: result.translatedText,
+          meaningEn: '',
+          examples: [],
+        },
+      ],
+    };
+  }
+
+  /**
    * 测试翻译服务是否可用
    */
   async testConnection(): Promise<{ success: boolean; message: string }> {

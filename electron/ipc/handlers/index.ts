@@ -282,6 +282,17 @@ export function registerIPCHandlers(
       return { success: true, data: result };
     } catch (error: any) {
       console.error('[IPC] ai:defineWord error:', error);
+      // AI 未配置时，自动降级到 Google 翻译
+      if (error.message?.includes('API key is not configured')) {
+        console.log('[IPC] ai:defineWord falling back to Google Translate');
+        try {
+          const googleResult = await googleTranslateService.getWordDefinition(params.word);
+          return { success: true, data: googleResult };
+        } catch (googleError: any) {
+          console.error('[IPC] Google fallback error:', googleError);
+          return { success: false, message: googleError.message || '获取单词释义失败' };
+        }
+      }
       return { success: false, message: error.message || '获取单词释义失败' };
     }
   });
