@@ -21,6 +21,8 @@ export interface IPCChannels {
   'db:addWordToBook': (wordBookId: number, wordId: number, context?: string) => Promise<boolean>;
   'db:removeWordFromBook': (wordBookId: number, wordId: number) => Promise<boolean>;
   'db:getWordsInBook': (wordBookId: number) => Promise<any[]>;
+  'db:updateWordReview': (itemId: number) => Promise<boolean>;
+  'db:getWordsDueForReview': () => Promise<any[]>;
   
   // 数据库操作 - AI配置
   'db:getAIConfigs': () => Promise<any[]>;

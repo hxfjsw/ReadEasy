@@ -176,6 +176,17 @@ export function registerIPCHandlers(
     return dbService.getWordsInBook(wordBookId);
   });
 
+  ipcMain.handle('db:updateWordReview', async (_, itemId: number) => {
+    console.log('[IPC] db:updateWordReview called');
+    dbService.updateWordReview(itemId);
+    return true;
+  });
+
+  ipcMain.handle('db:getWordsDueForReview', async () => {
+    console.log('[IPC] db:getWordsDueForReview called');
+    return dbService.getWordsDueForReview();
+  });
+
   // 数据库操作 - AI配置
   ipcMain.handle('db:getAIConfigs', async () => {
     console.log('[IPC] db:getAIConfigs called');

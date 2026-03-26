@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Modal, Spin, Button, Tag, message, Select } from 'antd';
-import { PlusOutlined, BookOutlined } from '@ant-design/icons';
+import { PlusOutlined, BookOutlined, SoundOutlined } from '@ant-design/icons';
 import type { WordDefinition, WordBook } from '../types';
 
 interface WordPopupProps {
@@ -8,9 +8,10 @@ interface WordPopupProps {
   context?: string;
   visible: boolean;
   onClose: () => void;
+  onPlayPronunciation?: (word: string) => void;
 }
 
-const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose }) => {
+const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, onPlayPronunciation }) => {
   const [loading, setLoading] = useState(false);
   const [definition, setDefinition] = useState<WordDefinition | null>(null);
   const [wordBooks, setWordBooks] = useState<WordBook[]>([]);
@@ -108,6 +109,14 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose }
             <h2 className="text-2xl font-bold">{definition.word}</h2>
             {definition.level && (
               <Tag color="blue">{definition.level}</Tag>
+            )}
+            {onPlayPronunciation && (
+              <Button
+                type="text"
+                icon={<SoundOutlined />}
+                onClick={() => onPlayPronunciation(definition.word)}
+                title="播放发音"
+              />
             )}
           </div>
           <div className="flex gap-4 text-gray-500 mt-1">

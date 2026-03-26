@@ -131,6 +131,21 @@ export class DatabaseService {
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_words_level ON words(level)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_word_book_items_book_id ON word_book_items(word_book_id)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_reading_records_path ON reading_records(file_path)`);
+    
+    // 迁移：为 word_book_items 添加复习相关字段
+    this.migrateWordBookItems();
+  }
+  
+  private migrateWordBookItems(): void {
+    // 检查是否需要添加 review_stage 列
+    const tableInfo = this.db.prepare(`PRAGMA table_info(word_book_items)`).all() as any[];
+    const hasReviewStage = tableInfo.some(col => col.name === 'review_stage');
+    
+    if (!hasReviewStage) {
+      this.db.exec(`ALTER TABLE word_book_items ADD COLUMN review_stage INTEGER NOT NULL DEFAULT 0`);
+      this.db.exec(`ALTER TABLE word_book_items ADD COLUMN last_reviewed_at INTEGER`);
+      this.db.exec(`ALTER TABLE word_book_items ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0`);
+    }
   }
 
   private async initializeDefaultData(): Promise<void> {
@@ -256,14 +271,48 @@ export class DatabaseService {
     `).run(wordBookId, wordId);
   }
 
-  getWordsInBook(wordBookId: number): (schema.Word & { context?: string; addedAt: Date })[] {
+  getWordsInBook(wordBookId: number): (schema.Word & { context?: string; addedAt: Date; reviewStage?: number; lastReviewedAt?: Date; reviewCount?: number })[] {
     return this.db.prepare(`
-      SELECT w.*, wbi.context, wbi.added_at as addedAt
+      SELECT w.*, wbi.context, wbi.added_at as addedAt, 
+             wbi.review_stage as reviewStage, wbi.last_reviewed_at as lastReviewedAt, 
+             wbi.review_count as reviewCount
       FROM words w
       JOIN word_book_items wbi ON w.id = wbi.word_id
       WHERE wbi.word_book_id = ?
       ORDER BY wbi.added_at DESC
     `).all(wordBookId) as any[];
+  }
+  
+  // 更新单词复习状态
+  updateWordReview(wordBookItemId: number): void {
+    this.db.prepare(`
+      UPDATE word_book_items 
+      SET review_stage = review_stage + 1,
+          review_count = review_count + 1,
+          last_reviewed_at = unixepoch()
+      WHERE id = ?
+    `).run(wordBookItemId);
+  }
+  
+  // 获取需要复习的单词
+  getWordsDueForReview(): any[] {
+    // 艾宾浩斯遗忘曲线复习间隔（天数）
+    const intervals = [1, 2, 4, 7, 15, 30];
+    
+    return this.db.prepare(`
+      SELECT w.*, wbi.id as itemId, wbi.word_book_id as wordBookId, 
+             wbi.review_stage, wbi.added_at, wbi.last_reviewed_at
+      FROM words w
+      JOIN word_book_items wbi ON w.id = wbi.word_id
+      WHERE wbi.review_stage < ?
+      AND (
+        wbi.last_reviewed_at IS NULL 
+        OR (unixepoch() - wbi.last_reviewed_at) > (?
+          * 24 * 60 * 60
+        )
+      )
+      ORDER BY wbi.added_at ASC
+    `).all(intervals.length, intervals) as any[];
   }
 
   // AI配置相关操作
