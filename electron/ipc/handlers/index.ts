@@ -60,15 +60,20 @@ export function registerIPCHandlers(
     }
   });
 
-  ipcMain.handle('file:read', async (_, filePath: string) => {
+  ipcMain.handle('file:read', async (_, filePath: string, options?: { maxContentSize?: number }) => {
     console.log('[IPC] file:read called with path:', filePath);
     try {
       const ext = path.extname(filePath).toLowerCase();
       console.log('[IPC] file:read extension:', ext);
       
+      // 解析选项：默认最大10MB内容
+      const parseOptions = {
+        maxContentSize: options?.maxContentSize || 10 * 1024 * 1024,
+      };
+      
       if (ext === '.epub') {
         console.log('[IPC] file:read parsing EPUB...');
-        const book = await parserService.parseEpub(filePath);
+        const book = await parserService.parseEpub(filePath, parseOptions);
         console.log('[IPC] file:read EPUB parsed, title:', book.title, 'chapters:', book.chapters.length);
         return { 
           success: true, 
@@ -81,7 +86,7 @@ export function registerIPCHandlers(
         };
       } else if (ext === '.txt') {
         console.log('[IPC] file:read parsing TXT...');
-        const book = await parserService.parseTxt(filePath);
+        const book = await parserService.parseTxt(filePath, parseOptions);
         console.log('[IPC] file:read TXT parsed, title:', book.title);
         return { 
           success: true, 
@@ -238,27 +243,61 @@ export function registerIPCHandlers(
   // AI服务
   ipcMain.handle('ai:testConnection', async (_, config: any) => {
     console.log('[IPC] ai:testConnection called');
-    return aiService.testConnection(config);
+    try {
+      return await aiService.testConnection(config);
+    } catch (error: any) {
+      console.error('[IPC] ai:testConnection error:', error);
+      return { success: false, message: error.message || '测试连接失败' };
+    }
   });
 
   ipcMain.handle('ai:defineWord', async (_, params: { word: string; context?: string; configId?: number }) => {
     console.log('[IPC] ai:defineWord called:', params.word);
-    return aiService.getWordDefinition(params.word, params.context, params.configId);
+    try {
+      const result = await aiService.getWordDefinition(params.word, params.context, params.configId);
+      return { success: true, data: result };
+    } catch (error: any) {
+      console.error('[IPC] ai:defineWord error:', error);
+      return { success: false, message: error.message || '获取单词释义失败' };
+    }
   });
 
   ipcMain.handle('ai:translate', async (_, params: { text: string; configId?: number }) => {
     console.log('[IPC] ai:translate called');
-    return aiService.translateSentence(params.text, params.configId);
+    try {
+      const result = await aiService.translateSentence(params.text, params.configId);
+      return { success: true, data: result };
+    } catch (error: any) {
+      console.error('[IPC] ai:translate error:', error);
+      return { success: false, message: error.message || '翻译失败' };
+    }
   });
 
   ipcMain.handle('ai:analyzeVocabulary', async (_, params: { text: string; configId?: number }) => {
     console.log('[IPC] ai:analyzeVocabulary called');
-    return aiService.analyzeVocabulary(params.text, params.configId);
+    try {
+      const result = await aiService.analyzeVocabulary(params.text, params.configId);
+      return { success: true, data: result };
+    } catch (error: any) {
+      console.error('[IPC] ai:analyzeVocabulary error:', error);
+      // 返回空数据而不是抛出错误，避免影响文件加载
+      return { 
+        success: false, 
+        message: error.message || '词汇分析失败',
+        data: { words: [], statistics: { totalWords: 0, uniqueWords: 0, byLevel: {} } }
+      };
+    }
   });
 
   ipcMain.handle('ai:generateExample', async (_, params: { word: string; level: string; configId?: number }) => {
     console.log('[IPC] ai:generateExample called:', params.word);
-    return aiService.generateExampleSentence(params.word, params.level, params.configId);
+    try {
+      const result = await aiService.generateExampleSentence(params.word, params.level, params.configId);
+      return { success: true, data: result };
+    } catch (error: any) {
+      console.error('[IPC] ai:generateExample error:', error);
+      return { success: false, message: error.message || '生成例句失败' };
+    }
   });
 
   // 窗口控制

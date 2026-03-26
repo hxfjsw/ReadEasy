@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Button, message, Tag, Spin, Empty, Drawer, Slider, Select, Tooltip } from 'antd';
+import { Button, message, Tag, Spin, Empty, Drawer, Slider, Select, Tooltip, Progress } from 'antd';
 import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined } from '@ant-design/icons';
 import WordPopup from '../components/WordPopup';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -8,6 +8,14 @@ import { VocabularyLevel, VocabularyLevelLabels } from '../types';
 interface Chapter {
   id: string;
   title: string;
+  content: string;
+}
+
+interface LoadingState {
+  isLoading: boolean;
+  stage: 'reading' | 'parsing' | 'rendering' | 'analyzing' | 'complete';
+  progress: number;
+  message: string;
 }
 
 // 词汇等级顺序（从低到高）
@@ -28,7 +36,14 @@ const ReaderPage: React.FC = () => {
   const [fileContent, setFileContent] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
   const [filePath, setFilePath] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  
+  // 增强的加载状态
+  const [loadingState, setLoadingState] = useState<LoadingState>({
+    isLoading: false,
+    stage: 'reading',
+    progress: 0,
+    message: '',
+  });
   
   // EPUB 章节相关
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -123,60 +138,166 @@ const ReaderPage: React.FC = () => {
 
   const loadFile = async (path: string) => {
     console.log('[ReaderPage] Loading file:', path);
-    setLoading(true);
+    const fileNameFromPath = path.split(/[\\/]/).pop() || '';
+    
+    // 开始加载
+    setLoadingState({
+      isLoading: true,
+      stage: 'reading',
+      progress: 0,
+      message: '正在读取文件...',
+    });
     setFilePath(path);
+    
     try {
       console.log('[ReaderPage] Invoking file:read...');
+      
+      // 第一阶段：读取文件
+      setLoadingState(prev => ({ ...prev, progress: 10, message: '正在读取文件...' }));
+      
       const result = await window.electron.ipcRenderer.invoke('file:read', path);
       console.log('[ReaderPage] file:read result:', result);
       
-      if (result.success) {
-        console.log('[ReaderPage] File loaded successfully, content length:', result.data?.length);
-        setFileContent(result.data || '');
-        const fileNameFromPath = path.split(/[\\/]/).pop();
-        setFileName(fileNameFromPath || '');
-        
-        // 设置章节信息
-        if (result.metadata?.chapters) {
-          setChapters(result.metadata.chapters);
-          setCurrentChapter(0);
-        } else {
-          setChapters([]);
-        }
-        
-        // 分析词汇
-        await analyzeVocabulary(result.data || '');
-        
-        // 加载阅读进度
-        await loadReadingProgress(path);
-        
-        message.success('文件加载成功');
-      } else {
+      if (!result.success) {
         console.error('[ReaderPage] Failed to read file:', result.error);
         message.error('读取文件失败: ' + result.error);
+        setLoadingState({ isLoading: false, stage: 'complete', progress: 0, message: '' });
+        return;
       }
+      
+      // 第二阶段：解析内容
+      setLoadingState({
+        isLoading: true,
+        stage: 'parsing',
+        progress: 30,
+        message: '正在解析内容...',
+      });
+      
+      console.log('[ReaderPage] File loaded successfully, content length:', result.data?.length);
+      
+      // 设置章节信息
+      let parsedChapters: Chapter[] = [];
+      if (result.metadata?.chapters && result.metadata.chapters.length > 0) {
+        // 使用解析的章节
+        parsedChapters = result.metadata.chapters.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          content: '', // 内容已合并到 fileContent
+        }));
+      } else {
+        // 单文件作为一个章节
+        parsedChapters = [{
+          id: '1',
+          title: fileNameFromPath,
+          content: result.data || '',
+        }];
+      }
+      
+      // 第三阶段：渲染内容（先显示第一屏）
+      setLoadingState({
+        isLoading: true,
+        stage: 'rendering',
+        progress: 60,
+        message: '正在渲染内容...',
+      });
+      
+      // 设置基础信息
+      setFileName(fileNameFromPath);
+      setChapters(parsedChapters);
+      setCurrentChapter(0);
+      
+      // 分块加载内容，先显示前10000字符，剩下的后台加载
+      const fullContent = result.data || '';
+      const initialChunk = fullContent.slice(0, 30000);
+      const remainingChunk = fullContent.slice(30000);
+      
+      setFileContent(initialChunk);
+      
+      // 显示完成，结束loading状态
+      setLoadingState({
+        isLoading: false,
+        stage: 'complete',
+        progress: 100,
+        message: '加载完成',
+      });
+      
+      message.success('文件加载成功');
+      
+      // 第四阶段：后台加载剩余内容和分析
+      if (remainingChunk.length > 0) {
+        // 延迟加载剩余内容
+        requestAnimationFrame(() => {
+          setFileContent(fullContent);
+          console.log('[ReaderPage] 剩余内容已加载');
+        });
+      }
+      
+      // 后台分析词汇
+      setTimeout(() => {
+        analyzeVocabulary(fullContent).catch(err => {
+          console.error('[ReaderPage] 后台词汇分析失败:', err);
+        });
+      }, 500);
+      
+      // 加载阅读进度
+      loadReadingProgress(path).catch(err => {
+        console.error('[ReaderPage] 加载阅读进度失败:', err);
+      });
+      
     } catch (error) {
       console.error('[ReaderPage] Error loading file:', error);
       message.error('读取文件失败');
-    } finally {
-      console.log('[ReaderPage] Setting loading to false');
-      setLoading(false);
+      setLoadingState({ isLoading: false, stage: 'complete', progress: 0, message: '' });
     }
   };
 
-  // 分析词汇，识别生词
+  // 分析词汇，识别生词（非阻塞，失败不影响文件显示）
   const analyzeVocabulary = async (text: string) => {
     try {
-      const result = await window.electron.ipcRenderer.invoke('ai:analyzeVocabulary', { text });
-      if (result.success && result.data?.words) {
+      // 限制文本长度，避免AI服务处理过大数据
+      const maxLength = 5000;
+      const truncatedText = text.slice(0, maxLength);
+      
+      // 添加超时处理，避免一直等待
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('词汇分析超时')), 10000);
+      });
+      
+      const result = await Promise.race([
+        window.electron.ipcRenderer.invoke('ai:analyzeVocabulary', { text: truncatedText }),
+        timeoutPromise,
+      ]) as any;
+      
+      // 处理不同的返回格式
+      let words: { word: string; level: string }[] = [];
+      
+      if (result?.words && Array.isArray(result.words)) {
+        // 直接返回格式: { words: [...], statistics: {...} }
+        words = result.words;
+      } else if (result?.data?.words && Array.isArray(result.data.words)) {
+        // 包装格式: { success: true, data: { words: [...] } }
+        words = result.data.words;
+      } else if (result?.success === false) {
+        // 明确返回失败
+        console.warn('词汇分析返回失败:', result.message || '未知错误');
+        return;
+      }
+      
+      if (words.length > 0) {
         const analysis = new Map<string, string>();
-        result.data.words.forEach((item: { word: string; level: string }) => {
-          analysis.set(item.word.toLowerCase(), item.level);
+        words.forEach((item: { word: string; level: string }) => {
+          if (item.word && item.level) {
+            analysis.set(item.word.toLowerCase(), item.level);
+          }
         });
         setVocabularyAnalysis(analysis);
+        console.log('[ReaderPage] 词汇分析完成，识别单词数:', words.length);
+      } else {
+        console.warn('[ReaderPage] 词汇分析未返回有效单词数据');
       }
     } catch (error) {
-      console.error('词汇分析失败:', error);
+      console.error('[ReaderPage] 词汇分析失败（非阻塞）:', error);
+      // 词汇分析失败不影响文件显示，只是不标记生词
     }
   };
 
@@ -374,6 +495,36 @@ const ReaderPage: React.FC = () => {
 
   const themeStyles = getThemeStyles();
 
+  // 渲染加载状态
+  const renderLoading = () => {
+    const stageMessages: Record<string, string> = {
+      reading: '正在读取文件...',
+      parsing: '正在解析内容...',
+      rendering: '正在渲染内容...',
+      analyzing: '正在分析词汇...',
+      complete: '加载完成',
+    };
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full space-y-6">
+        <Spin size="large" />
+        <div className="text-center space-y-3 w-80">
+          <p className="text-lg font-medium text-gray-700">
+            {loadingState.message || stageMessages[loadingState.stage]}
+          </p>
+          <Progress 
+            percent={loadingState.progress} 
+            status="active"
+            strokeColor={{ from: '#108ee9', to: '#87d068' }}
+          />
+          <p className="text-sm text-gray-500">
+            大文件可能需要一些时间，请耐心等待
+          </p>
+        </div>
+      </div>
+    );
+  };
+
   const renderContent = () => {
     console.log('[ReaderPage] Rendering content, fileContent length:', fileContent?.length);
     
@@ -412,7 +563,7 @@ const ReaderPage: React.FC = () => {
     );
   };
 
-  console.log('[ReaderPage] Rendering, loading:', loading);
+  console.log('[ReaderPage] Rendering, loading:', loadingState.isLoading);
 
   return (
     <div className="h-full flex flex-col">
@@ -424,6 +575,7 @@ const ReaderPage: React.FC = () => {
           <Button 
             icon={<UploadOutlined />} 
             onClick={handleFileSelect}
+            disabled={loadingState.isLoading}
           >
             打开文件
           </Button>
@@ -431,6 +583,7 @@ const ReaderPage: React.FC = () => {
             <Button
               icon={<MenuOutlined />}
               onClick={() => setChapterDrawerOpen(true)}
+              disabled={loadingState.isLoading}
             >
               章节
             </Button>
@@ -466,10 +619,8 @@ const ReaderPage: React.FC = () => {
         className={`flex-1 overflow-auto ${themeStyles.bg}`}
         onScroll={handleScroll}
       >
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <Spin size="large" tip="加载中..." />
-          </div>
+        {loadingState.isLoading ? (
+          renderLoading()
         ) : (
           renderContent()
         )}

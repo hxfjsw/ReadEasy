@@ -4,7 +4,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 export interface IPCChannels {
   // 文件操作
   'file:open': () => Promise<{ canceled: boolean; filePaths: string[] }>;
-  'file:read': (filePath: string) => Promise<{ success: boolean; data?: string; error?: string; metadata?: any }>;
+  'file:read': (filePath: string, options?: { maxContentSize?: number }) => Promise<{ success: boolean; data?: string; error?: string; metadata?: any }>;
   
   // 数据库操作 - 用户
   'db:getUser': () => Promise<any>;

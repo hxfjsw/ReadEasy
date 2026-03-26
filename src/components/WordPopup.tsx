@@ -36,7 +36,7 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
       if (result.success) {
         setDefinition(result.data);
       } else {
-        message.error('获取单词定义失败: ' + result.error);
+        message.error('获取单词定义失败: ' + (result.message || result.error || '未知错误'));
       }
     } catch (error) {
       message.error('获取单词定义失败');

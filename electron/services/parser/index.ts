@@ -15,108 +15,94 @@ export interface Chapter {
   content: string;
 }
 
+export interface ParseOptions {
+  maxChapters?: number;      // 最大解析章节数，0表示全部
+  maxContentSize?: number;   // 最大内容大小（字节），默认10MB
+}
+
 export class ParserService {
   /**
-   * 解析 EPUB 文件
+   * 解析 EPUB 文件（优化版）
+   * @param filePath 文件路径
+   * @param options 解析选项
    */
-  async parseEpub(filePath: string): Promise<ParsedBook> {
-    console.log('[Parser] ===========================================');
+  async parseEpub(filePath: string, options: ParseOptions = {}): Promise<ParsedBook> {
+    const { maxChapters = 0, maxContentSize = 10 * 1024 * 1024 } = options;
+    
     console.log('[Parser] Starting EPUB parse:', filePath);
-    console.log('[Parser] ===========================================');
+    const startTime = Date.now();
     
     try {
-      console.log('[Parser] Checking if file exists...');
       if (!fs.existsSync(filePath)) {
-        console.error('[Parser] File does not exist:', filePath);
         throw new Error('File not found: ' + filePath);
       }
       
-      console.log('[Parser] Reading file...');
+      // 读取文件
       const data = fs.readFileSync(filePath);
-      console.log('[Parser] File read, size:', data.length, 'bytes');
+      const fileSizeMB = (data.length / 1024 / 1024).toFixed(2);
+      console.log(`[Parser] File size: ${fileSizeMB} MB`);
       
-      console.log('[Parser] Loading ZIP...');
+      // 解压 ZIP
       const zip = await JSZip.loadAsync(data);
       const fileNames = Object.keys(zip.files);
-      console.log('[Parser] ZIP loaded, total files:', fileNames.length);
-      console.log('[Parser] ZIP files sample:', fileNames.slice(0, 20));
       
       // 找到 container.xml
-      console.log('[Parser] Looking for META-INF/container.xml...');
       const containerFile = zip.file('META-INF/container.xml');
       if (!containerFile) {
-        console.error('[Parser] META-INF/container.xml not found');
-        console.log('[Parser] Available root files:', fileNames.filter(f => !f.includes('/')));
         throw new Error('Invalid EPUB: container.xml not found');
       }
       
       const containerXml = await containerFile.async('text');
-      console.log('[Parser] container.xml found, length:', containerXml.length);
-      console.log('[Parser] container.xml content preview:', containerXml.substring(0, 500));
-      
-      // 解析 container.xml 获取 content.opf 路径
-      console.log('[Parser] Extracting content.opf path from container.xml...');
       const contentOpfPath = this.extractContentOpfPath(containerXml);
-      console.log('[Parser] Extracted content.opf path:', contentOpfPath);
       
       if (!contentOpfPath) {
-        console.error('[Parser] content.opf path not found in container.xml');
         throw new Error('Invalid EPUB: content.opf path not found');
       }
       
       // 尝试不同的路径格式
       let contentOpf = await zip.file(contentOpfPath)?.async('text');
       
-      // 如果没找到，尝试其他可能的路径
       if (!contentOpf) {
-        console.log('[Parser] content.opf not found at:', contentOpfPath);
-        console.log('[Parser] Trying alternative paths...');
-        
-        // 尝试不带路径分隔符的版本
         const altPath1 = contentOpfPath.replace(/\\/g, '/');
-        console.log('[Parser] Trying:', altPath1);
         contentOpf = await zip.file(altPath1)?.async('text');
         
         if (!contentOpf) {
-          // 尝试查找任何 .opf 文件
           const opfFiles = fileNames.filter(f => f.endsWith('.opf'));
-          console.log('[Parser] Found .opf files:', opfFiles);
-          
           if (opfFiles.length > 0) {
-            console.log('[Parser] Using first .opf file:', opfFiles[0]);
             contentOpf = await zip.file(opfFiles[0])?.async('text');
           }
         }
       }
       
       if (!contentOpf) {
-        console.error('[Parser] content.opf not found at any path');
         throw new Error('Invalid EPUB: content.opf not found');
       }
       
-      console.log('[Parser] content.opf found, length:', contentOpf.length);
-      console.log('[Parser] content.opf preview:', contentOpf.substring(0, 500));
-      
-      // 解析 content.opf 获取元数据和章节列表
-      console.log('[Parser] Parsing content.opf...');
+      // 解析 content.opf
       const { title, author, manifest, spine, basePath } = this.parseContentOpf(contentOpf, contentOpfPath);
-      console.log('[Parser] content.opf parsed:', { title, author, manifestSize: manifest.size, spineLength: spine.length, basePath });
+      console.log(`[Parser] Book: "${title}", Author: "${author}", Chapters: ${spine.length}`);
       
-      // 读取所有章节内容
-      console.log('[Parser] Reading chapters...');
+      // 确定要解析的章节数量
+      const chaptersToParse = maxChapters > 0 ? Math.min(maxChapters, spine.length) : spine.length;
+      if (chaptersToParse < spine.length) {
+        console.log(`[Parser] Limiting to first ${chaptersToParse}/${spine.length} chapters`);
+      }
+      
+      // 读取章节内容
       const chapters: Chapter[] = [];
+      let totalContentSize = 0;
+      const maxChapterSize = 1024 * 1024; // 单章最大 1MB
       
-      for (let i = 0; i < spine.length; i++) {
+      for (let i = 0; i < chaptersToParse; i++) {
         const spineItem = spine[i];
-        console.log(`[Parser] Processing spine item ${i + 1}/${spine.length}:`, spineItem);
         
-        const item = manifest.get(spineItem);
-        if (!item) {
-          console.warn(`[Parser] Spine item "${spineItem}" not found in manifest`);
-          continue;
+        // 每10章输出一次日志
+        if ((i + 1) % 10 === 0 || i === chaptersToParse - 1) {
+          console.log(`[Parser] Processing ${i + 1}/${chaptersToParse}...`);
         }
         
-        console.log(`[Parser] Item found:`, { id: spineItem, href: item.href, mediaType: item.mediaType });
+        const item = manifest.get(spineItem);
+        if (!item) continue;
         
         // 支持多种 HTML 类型
         const isHtml = item.mediaType === 'application/xhtml+xml' || 
@@ -125,102 +111,114 @@ export class ParserService {
                        item.href.endsWith('.xhtml') ||
                        item.href.endsWith('.htm');
         
-        if (isHtml) {
-          // 尝试多种路径组合
-          const possiblePaths = [
-            basePath ? `${basePath}/${item.href}` : item.href,
-            item.href,
-            basePath ? `${basePath}/${item.href}`.replace(/\\/g, '/') : item.href.replace(/\\/g, '/'),
-          ];
-          
-          let chapterContent: string | null = null;
-          let foundPath: string | null = null;
-          
-          for (const tryPath of possiblePaths) {
-            console.log('[Parser] Trying chapter path:', tryPath);
-            const content = await zip.file(tryPath)?.async('text');
-            if (content) {
-              chapterContent = content;
-              foundPath = tryPath;
+        if (!isHtml) continue;
+        
+        // 尝试多种路径组合
+        const possiblePaths = [
+          basePath ? `${basePath}/${item.href}` : item.href,
+          item.href,
+          basePath ? `${basePath}/${item.href}`.replace(/\\/g, '/') : item.href.replace(/\\/g, '/'),
+        ];
+        
+        let chapterContent: string | null = null;
+        
+        for (const tryPath of possiblePaths) {
+          const content = await zip.file(tryPath)?.async('text');
+          if (content) {
+            chapterContent = content;
+            break;
+          }
+        }
+        
+        // 如果没找到，尝试在 zip 中搜索匹配的文件名
+        if (!chapterContent) {
+          const fileName = path.basename(item.href);
+          for (const zipPath of fileNames) {
+            if (zipPath.endsWith(fileName)) {
+              chapterContent = await zip.file(zipPath)?.async('text') || null;
               break;
             }
           }
-          
-          // 如果没找到，尝试在 zip 中搜索匹配的文件名
-          if (!chapterContent) {
-            const fileName = path.basename(item.href);
-            console.log('[Parser] Searching for file by name:', fileName);
-            
-            for (const zipPath of fileNames) {
-              if (zipPath.endsWith(fileName)) {
-                console.log('[Parser] Found matching file:', zipPath);
-                chapterContent = await zip.file(zipPath)?.async('text') || null;
-                foundPath = zipPath;
-                break;
-              }
-            }
+        }
+        
+        if (chapterContent) {
+          // 限制单章大小
+          if (chapterContent.length > maxChapterSize) {
+            console.warn(`[Parser] Chapter ${i + 1} is very large (${chapterContent.length} chars), truncating`);
+            chapterContent = chapterContent.slice(0, maxChapterSize) + '\n\n[内容已截断...]';
           }
           
-          if (chapterContent) {
-            console.log('[Parser] Chapter content found at:', foundPath, 'length:', chapterContent.length);
-            try {
-              const { title: chapterTitle, content: cleanContent } = this.parseChapter(chapterContent);
+          try {
+            const { title: chapterTitle, content: cleanContent } = this.parseChapter(chapterContent);
+            
+            // 检查总内容大小限制
+            if (totalContentSize + cleanContent.length > maxContentSize) {
+              console.warn('[Parser] Total content size limit reached, stopping');
               chapters.push({
                 id: spineItem,
-                title: chapterTitle || item.href,
-                content: cleanContent,
+                title: chapterTitle || `章节 ${i + 1}`,
+                content: cleanContent.slice(0, maxContentSize - totalContentSize) + '\n\n[内容已截断...]',
               });
-              console.log('[Parser] Chapter parsed successfully:', { title: chapterTitle || item.href, contentLength: cleanContent.length });
-            } catch (parseError) {
-              console.error('[Parser] Failed to parse chapter:', spineItem, parseError);
+              break;
             }
-          } else {
-            console.warn('[Parser] Chapter content not found for:', spineItem, 'tried paths:', possiblePaths);
+            
+            chapters.push({
+              id: spineItem,
+              title: chapterTitle || `章节 ${i + 1}`,
+              content: cleanContent,
+            });
+            totalContentSize += cleanContent.length;
+          } catch (parseError) {
+            console.error(`[Parser] Failed to parse chapter ${i + 1}:`, parseError);
           }
-        } else {
-          console.log('[Parser] Skipping non-HTML item:', spineItem, 'mediaType:', item.mediaType);
         }
       }
       
-      console.log('[Parser] All chapters processed, total:', chapters.length);
+      // 合并所有章节内容（使用更高效的方式）
+      const contentParts: string[] = [];
+      for (const chapter of chapters) {
+        contentParts.push(chapter.content);
+      }
+      const fullContent = contentParts.join('\n\n');
       
-      // 合并所有章节内容
-      console.log('[Parser] Merging chapter contents...');
-      const fullContent = chapters.map(c => c.content).join('\n\n');
-      console.log('[Parser] Content merged, total length:', fullContent.length);
+      const duration = Date.now() - startTime;
+      console.log(`[Parser] EPUB parsed in ${duration}ms, ${chapters.length} chapters, ${fullContent.length} chars`);
       
-      const result = {
+      return {
         title,
         author,
         content: fullContent,
         chapters,
       };
-      
-      console.log('[Parser] ===========================================');
-      console.log('[Parser] EPUB parse complete:', { title, author, chapterCount: chapters.length, contentLength: fullContent.length });
-      console.log('[Parser] ===========================================');
-      return result;
     } catch (error) {
-      console.error('[Parser] ===========================================');
       console.error('[Parser] EPUB parse failed:', error);
-      console.error('[Parser] Stack:', (error as Error).stack);
-      console.error('[Parser] ===========================================');
       throw error;
     }
   }
   
   /**
-   * 解析 TXT 文件
+   * 解析 TXT 文件（优化版，支持大文件）
    */
-  async parseTxt(filePath: string): Promise<ParsedBook> {
+  async parseTxt(filePath: string, options: ParseOptions = {}): Promise<ParsedBook> {
+    const { maxContentSize = 10 * 1024 * 1024 } = options;
+    
     console.log('[Parser] Starting TXT parse:', filePath);
     
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      console.log('[Parser] TXT file read, length:', content.length);
+      // 获取文件大小
+      const stats = fs.statSync(filePath);
+      const fileSizeMB = (stats.size / 1024 / 1024).toFixed(2);
+      console.log(`[Parser] TXT file size: ${fileSizeMB} MB`);
+      
+      let content = fs.readFileSync(filePath, 'utf-8');
+      
+      // 如果文件太大，截断内容
+      if (content.length > maxContentSize) {
+        console.warn(`[Parser] TXT file is very large, truncating to ${maxContentSize} bytes`);
+        content = content.slice(0, maxContentSize) + '\n\n[文件内容过长，已截断...]';
+      }
       
       const fileName = path.basename(filePath, '.txt');
-      console.log('[Parser] TXT file name:', fileName);
       
       return {
         title: fileName,
@@ -264,7 +262,7 @@ export class ParserService {
   }
   
   /**
-   * 解析 content.opf 文件
+   * 解析 content.opf 文件（优化版）
    */
   private parseContentOpf(contentOpf: string, contentOpfPath: string): {
     title: string;
@@ -273,10 +271,7 @@ export class ParserService {
     spine: string[];
     basePath: string;
   } {
-    console.log('[Parser] Parsing content.opf...');
-    
     const basePath = path.dirname(contentOpfPath);
-    console.log('[Parser] basePath:', basePath);
     
     // 提取标题 - 尝试多种模式
     let title = 'Unknown Title';
@@ -291,7 +286,6 @@ export class ParserService {
         break;
       }
     }
-    console.log('[Parser] Title:', title);
     
     // 提取作者 - 尝试多种模式
     let author = '';
@@ -307,13 +301,10 @@ export class ParserService {
         break;
       }
     }
-    console.log('[Parser] Author:', author);
     
     // 解析 manifest - 支持多种格式
-    console.log('[Parser] Parsing manifest...');
     const manifest = new Map<string, { href: string; mediaType: string }>();
     
-    // 尝试多种 manifest item 模式
     const manifestPatterns = [
       /<item[^>]+id="([^"]+)"[^>]+href="([^"]+)"[^>]+media-type="([^"]+)"[^>]*\/?>/gi,
       /<item[^>]+href="([^"]+)"[^>]+id="([^"]+)"[^>]+media-type="([^"]+)"[^>]*\/?>/gi,
@@ -323,7 +314,6 @@ export class ParserService {
     for (const pattern of manifestPatterns) {
       let match;
       while ((match = pattern.exec(contentOpf)) !== null) {
-        // 根据模式确定捕获组的顺序
         let id, href, mediaType;
         if (pattern.toString().includes('id="([^"]+)"[^>]+href=')) {
           id = match[1]; href = match[2]; mediaType = match[3];
@@ -338,63 +328,76 @@ export class ParserService {
         }
       }
       
-      if (manifest.size > 0) break; // 如果找到了数据，停止尝试其他模式
+      if (manifest.size > 0) break;
     }
     
-    console.log('[Parser] Manifest items:', manifest.size);
-    
     // 解析 spine
-    console.log('[Parser] Parsing spine...');
     const spine: string[] = [];
     const spineRegex = /<itemref[^>]+idref="([^"]+)"[^>]*\/?>/gi;
     let match;
     while ((match = spineRegex.exec(contentOpf)) !== null) {
       spine.push(match[1]);
     }
-    console.log('[Parser] Spine items:', spine.length);
     
     return { title, author, manifest, spine, basePath };
   }
   
   /**
-   * 解析章节内容，提取标题和纯文本
+   * 解析章节内容，提取标题和纯文本（优化版，处理大内容更高效）
    */
   private parseChapter(html: string): { title: string | null; content: string } {
-    console.log('[Parser] Parsing chapter, HTML length:', html.length);
+    // 对于超大章节，使用分段处理
+    const maxProcessSize = 500 * 1024; // 500KB
     
-    // 提取标题 - 尝试多种模式
+    // 提取标题（只在前10KB中查找以提高性能）
     let title: string | null = null;
+    const headerSlice = html.slice(0, 10000);
     const titlePatterns = [
       /<title[^>]*>([^<]*)<\/title>/i,
       /<h1[^>]*>([^<]*)<\/h1>/i,
       /<h2[^>]*>([^<]*)<\/h2>/i,
     ];
     for (const pattern of titlePatterns) {
-      const match = html.match(pattern);
+      const match = headerSlice.match(pattern);
       if (match && match[1].trim()) {
         title = match[1].trim();
         break;
       }
     }
-    console.log('[Parser] Chapter title:', title);
     
-    // 移除 HTML 标签，保留文本内容
-    console.log('[Parser] Converting HTML to text...');
-    let text = html
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\s+/g, ' ')
-      .trim();
+    // 移除 HTML 标签 - 使用更高效的方式
+    let text: string;
     
-    console.log('[Parser] Text extracted, length:', text.length);
+    if (html.length > maxProcessSize) {
+      // 大文件使用分段处理
+      const chunks: string[] = [];
+      for (let i = 0; i < html.length; i += maxProcessSize) {
+        const chunk = html.slice(i, i + maxProcessSize);
+        chunks.push(this.cleanHtmlChunk(chunk));
+      }
+      text = chunks.join(' ');
+    } else {
+      text = this.cleanHtmlChunk(html);
+    }
     
     return { title, content: text };
+  }
+  
+  /**
+   * 清理 HTML 片段
+   */
+  private cleanHtmlChunk(html: string): string {
+    return html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 }
