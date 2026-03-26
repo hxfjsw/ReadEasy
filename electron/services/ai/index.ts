@@ -149,20 +149,37 @@ export class AIService {
     const prompt = this.buildDefinitionPrompt(word, context);
     
     try {
-      const response = await client.chat.completions.create({
+      // 检查是否支持 json_object 格式
+      const supportsJsonObject = config.provider !== 'lmstudio' && config.provider !== 'custom';
+      
+      const requestOptions: any = {
         model: config.model,
         messages: [{ role: 'user', content: prompt }],
         temperature: config.temperature,
         max_tokens: config.maxTokens,
-        response_format: { type: 'json_object' },
-      });
+      };
+      
+      // 只有支持的 provider 才使用 response_format
+      if (supportsJsonObject) {
+        requestOptions.response_format = { type: 'json_object' };
+      }
+
+      const response = await client.chat.completions.create(requestOptions);
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
         throw new Error('Empty response from AI');
       }
 
-      const result = JSON.parse(content);
+      // 尝试解析 JSON，如果不支持 json_object 格式，可能需要从文本中提取 JSON
+      let result: any;
+      if (supportsJsonObject) {
+        result = JSON.parse(content);
+      } else {
+        // 尝试从文本中提取 JSON 块
+        result = this.extractJsonFromText(content);
+      }
+      
       return this.normalizeDefinition(result);
     } catch (error: any) {
       console.error('Failed to get word definition:', error);
@@ -225,20 +242,36 @@ export class AIService {
     const prompt = this.buildVocabularyAnalysisPrompt(text);
     
     try {
-      const response = await client.chat.completions.create({
+      // 检查是否支持 json_object 格式
+      const supportsJsonObject = config.provider !== 'lmstudio' && config.provider !== 'custom';
+      
+      const requestOptions: any = {
         model: config.model,
         messages: [{ role: 'user', content: prompt }],
         temperature: config.temperature,
         max_tokens: config.maxTokens,
-        response_format: { type: 'json_object' },
-      });
+      };
+      
+      // 只有支持的 provider 才使用 response_format
+      if (supportsJsonObject) {
+        requestOptions.response_format = { type: 'json_object' };
+      }
+
+      const response = await client.chat.completions.create(requestOptions);
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
         throw new Error('Empty response from AI');
       }
 
-      const result = JSON.parse(content);
+      // 尝试解析 JSON
+      let result: any;
+      if (supportsJsonObject) {
+        result = JSON.parse(content);
+      } else {
+        result = this.extractJsonFromText(content);
+      }
+      
       return this.normalizeVocabularyAnalysis(result);
     } catch (error: any) {
       console.error('Failed to analyze vocabulary:', error);
@@ -253,20 +286,36 @@ export class AIService {
     const prompt = this.buildExamplePrompt(word, level);
     
     try {
-      const response = await client.chat.completions.create({
+      // 检查是否支持 json_object 格式
+      const supportsJsonObject = config.provider !== 'lmstudio' && config.provider !== 'custom';
+      
+      const requestOptions: any = {
         model: config.model,
         messages: [{ role: 'user', content: prompt }],
         temperature: config.temperature,
         max_tokens: config.maxTokens,
-        response_format: { type: 'json_object' },
-      });
+      };
+      
+      // 只有支持的 provider 才使用 response_format
+      if (supportsJsonObject) {
+        requestOptions.response_format = { type: 'json_object' };
+      }
+
+      const response = await client.chat.completions.create(requestOptions);
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
         throw new Error('Empty response from AI');
       }
 
-      const result = JSON.parse(content);
+      // 尝试解析 JSON
+      let result: any;
+      if (supportsJsonObject) {
+        result = JSON.parse(content);
+      } else {
+        result = this.extractJsonFromText(content);
+      }
+      
       return {
         sentence: result.sentence || result.example || '',
         translation: result.translation || result.chinese || '',
@@ -300,7 +349,7 @@ You MUST also provide etymology analysis including:
 2. rootAnalysis: Break down the word into its root(s), prefix, and suffix with explanations
 3. relatedWords: List 3-5 words that share the same root or are etymologically related
 
-Return the result in the following JSON format:
+IMPORTANT: Return ONLY a valid JSON object in the following format, without any markdown formatting or extra text:
 {
   "word": "${word}",
   "phoneticUk": "British phonetic symbol",
@@ -335,7 +384,7 @@ Return the result in the following JSON format:
 
 Text: ${text.slice(0, 1000)}
 
-Return the result in the following JSON format:
+IMPORTANT: Return ONLY a valid JSON object in the following format, without any markdown formatting or extra text:
 {
   "words": [
     {
@@ -367,7 +416,7 @@ Return the result in the following JSON format:
   private buildExamplePrompt(word: string, level: string): string {
     return `Generate an example sentence using the word "${word}" suitable for ${level} level English learners.
 
-Return the result in the following JSON format:
+IMPORTANT: Return ONLY a valid JSON object in the following format, without any markdown formatting or extra text:
 {
   "sentence": "The example sentence using the word.",
   "translation": "中文翻译"
@@ -408,5 +457,36 @@ Return the result in the following JSON format:
         byLevel: result.statistics?.byLevel || {},
       },
     };
+  }
+
+  // 从文本中提取 JSON
+  private extractJsonFromText(text: string): any {
+    // 尝试直接解析
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      // 尝试查找 JSON 代码块
+      const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonBlockMatch) {
+        try {
+          return JSON.parse(jsonBlockMatch[1].trim());
+        } catch (e2) {
+          // 继续尝试其他方法
+        }
+      }
+      
+      // 尝试查找花括号包裹的内容
+      const curlyMatch = text.match(/\{[\s\S]*\}/);
+      if (curlyMatch) {
+        try {
+          return JSON.parse(curlyMatch[0]);
+        } catch (e3) {
+          // 继续尝试其他方法
+        }
+      }
+      
+      // 如果都失败了，抛出错误
+      throw new Error('无法从响应中解析 JSON: ' + text.substring(0, 100));
+    }
   }
 }
