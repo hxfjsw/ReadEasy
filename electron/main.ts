@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import path from 'path';
 import { DatabaseService } from './services/database';
 import { AIService } from './services/ai';
@@ -34,6 +34,9 @@ const createWindow = () => {
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
+
+  // 移除顶部菜单栏（File Edit View 等）
+  Menu.setApplicationMenu(null);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
