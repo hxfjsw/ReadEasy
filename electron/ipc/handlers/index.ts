@@ -229,15 +229,15 @@ export function registerIPCHandlers(
     // 参数校验
     if (!data || !data.filePath) {
       console.error('[IPC] db:addOrUpdateReadingRecord error: Missing filePath');
-      return { success: false, error: 'Missing filePath' };
+      return false;
     }
     
     try {
       dbService.addOrUpdateReadingRecord(data);
-      return { success: true };
+      return true;
     } catch (error: any) {
       console.error('[IPC] db:addOrUpdateReadingRecord error:', error);
-      return { success: false, error: error.message };
+      return false;
     }
   });
 

@@ -86,8 +86,7 @@ describe('IPC Handlers', () => {
       await import('./index');
 
       const result = await handlers['db:addOrUpdateReadingRecord']({}, { bookName: 'Test' });
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Missing filePath');
+      expect(result).toBe(false);
     });
 
     it('应该成功添加有效记录', async () => {
@@ -109,7 +108,7 @@ describe('IPC Handlers', () => {
       };
 
       const result = await handlers['db:addOrUpdateReadingRecord']({}, validData);
-      expect(result.success).toBe(true);
+      expect(result).toBe(true);
     });
   });
 });

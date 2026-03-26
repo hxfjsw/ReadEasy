@@ -118,7 +118,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         if (fileResult.success) {
           const fileName = filePath.split(/[\\/]/).pop() || 'Unknown';
           // 添加到书架
-          await window.electron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
+          const addResult = await window.electron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
             bookName: fileResult.metadata?.title || fileName,
             filePath: filePath,
             format: filePath.split('.').pop() || '',
@@ -127,10 +127,16 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
             bookmarks: '[]',
             lastReadAt: new Date().toISOString(),
           });
-          message.success('已添加到书架');
-          loadBooks();
+          
+          if (addResult) {
+            message.success('已添加到书架');
+            // 立即重新加载书架数据
+            await loadBooks();
+          } else {
+            message.error('添加到书架失败');
+          }
         } else {
-          message.error('读取文件失败');
+          message.error('读取文件失败: ' + (fileResult.error || '未知错误'));
         }
       }
     } catch (error) {
