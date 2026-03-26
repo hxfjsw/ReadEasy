@@ -10,37 +10,54 @@ const ReaderPage: React.FC = () => {
 
 
   const handleFileSelect = async () => {
+    console.log('[ReaderPage] Opening file dialog...');
     try {
       const result = await window.electron.ipcRenderer.invoke('file:open');
+      console.log('[ReaderPage] File dialog result:', result);
+      
       if (!result.canceled && result.filePaths.length > 0) {
         const filePath = result.filePaths[0];
+        console.log('[ReaderPage] Selected file:', filePath);
         await loadFile(filePath);
+      } else {
+        console.log('[ReaderPage] File selection cancelled');
       }
     } catch (error) {
+      console.error('[ReaderPage] Failed to select file:', error);
       message.error('选择文件失败');
     }
   };
 
   const loadFile = async (filePath: string) => {
+    console.log('[ReaderPage] Loading file:', filePath);
     setLoading(true);
     try {
+      console.log('[ReaderPage] Invoking file:read...');
       const result = await window.electron.ipcRenderer.invoke('file:read', filePath);
+      console.log('[ReaderPage] file:read result:', result);
+      
       if (result.success) {
+        console.log('[ReaderPage] File loaded successfully, content length:', result.data?.length);
         setFileContent(result.data || '');
         const fileNameFromPath = filePath.split(/[\\/]/).pop();
         setFileName(fileNameFromPath || '');
         message.success('文件加载成功');
       } else {
+        console.error('[ReaderPage] Failed to read file:', result.error);
         message.error('读取文件失败: ' + result.error);
       }
     } catch (error) {
+      console.error('[ReaderPage] Error loading file:', error);
       message.error('读取文件失败');
     } finally {
+      console.log('[ReaderPage] Setting loading to false');
       setLoading(false);
     }
   };
 
   const renderContent = () => {
+    console.log('[ReaderPage] Rendering content, fileContent length:', fileContent?.length);
+    
     if (!fileContent) {
       return (
         <Empty
@@ -65,6 +82,8 @@ const ReaderPage: React.FC = () => {
       </div>
     );
   };
+
+  console.log('[ReaderPage] Rendering, loading:', loading);
 
   return (
     <div className="h-full flex flex-col">
