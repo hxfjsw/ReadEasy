@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ParserService } from './index';
 import * as fs from 'fs';
 import * as path from 'path';

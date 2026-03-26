@@ -17,7 +17,6 @@ vi.mock('electron', () => ({
 
 describe('IPC Handlers', () => {
   let mockDBService: any;
-  let mockAIService: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -46,13 +45,6 @@ describe('IPC Handlers', () => {
       setSetting: vi.fn(),
     };
 
-    mockAIService = {
-      testConnection: vi.fn(),
-      getWordDefinition: vi.fn(),
-      translateSentence: vi.fn(),
-      analyzeVocabulary: vi.fn(),
-      generateExampleSentence: vi.fn(),
-    };
   });
 
   describe('file:read', () => {
