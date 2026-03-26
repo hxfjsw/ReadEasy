@@ -137,8 +137,15 @@ export function registerIPCHandlers(
   });
 
   ipcMain.handle('db:addWord', async (_, data: any) => {
-    console.log('[IPC] db:addWord called');
-    return dbService.addWord(data);
+    console.log('[IPC] db:addWord called with:', data?.word);
+    try {
+      const id = dbService.addWord(data);
+      console.log('[IPC] db:addWord success, id:', id);
+      return { success: true, id };
+    } catch (error: any) {
+      console.error('[IPC] db:addWord error:', error);
+      return { success: false, message: error.message };
+    }
   });
 
   // 数据库操作 - 单词本
