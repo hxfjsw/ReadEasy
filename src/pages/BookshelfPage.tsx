@@ -24,9 +24,11 @@ interface BookshelfItem extends ReadingRecord {
   id: number;
   bookName: string;
   filePath: string;
+  file_path?: string;  // 数据库返回的是下划线格式
   format: string;
   progress: number;
   lastReadAt: Date;
+  last_read_at?: Date; // 数据库返回的是下划线格式
 }
 
 interface BookshelfPageProps {
@@ -50,12 +52,20 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
       // 过滤掉没有 filePath 的记录，并按最后阅读时间排序
       const validRecords = (records || [])
         .filter((record: BookshelfItem) => {
-          const hasPath = record.filePath && record.filePath.trim() !== '';
+          // 数据库返回下划线格式，需要同时检查两种格式
+          const path = record.filePath || record.file_path;
+          const hasPath = path && path.trim() !== '';
           if (!hasPath) {
             console.log('[Bookshelf] 过滤掉无路径记录:', record);
           }
           return hasPath;
         })
+        .map((record: BookshelfItem) => ({
+          ...record,
+          // 统一转换为驼峰格式
+          filePath: record.filePath || record.file_path,
+          lastReadAt: record.lastReadAt || record.last_read_at,
+        }))
         .sort((a: BookshelfItem, b: BookshelfItem) => {
           return new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime();
         });
