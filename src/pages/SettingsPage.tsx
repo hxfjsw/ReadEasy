@@ -162,6 +162,7 @@ const SettingsPage: React.FC = () => {
       render: (provider: string) => ({
         openai: 'OpenAI',
         'openai-compatible': 'OpenAI Compatible',
+        lmstudio: 'LM Studio',
         azure: 'Azure OpenAI',
         anthropic: 'Anthropic',
         custom: '自定义',
@@ -325,9 +326,33 @@ const SettingsPage: React.FC = () => {
                   rules={[{ required: true }]}
                   initialValue="openai"
                 >
-                  <Select>
+                  <Select
+                    onChange={(value) => {
+                      // 根据提供商自动设置默认值
+                      if (value === 'lmstudio') {
+                        aiForm.setFieldsValue({
+                          baseUrl: 'http://localhost:1234/v1',
+                          apiKey: 'lm-studio',
+                          model: 'local-model',
+                        });
+                      } else if (value === 'openai') {
+                        aiForm.setFieldsValue({
+                          baseUrl: 'https://api.openai.com/v1',
+                          apiKey: '',
+                          model: 'gpt-3.5-turbo',
+                        });
+                      } else if (value === 'openai-compatible') {
+                        aiForm.setFieldsValue({
+                          baseUrl: '',
+                          apiKey: '',
+                          model: '',
+                        });
+                      }
+                    }}
+                  >
                     <Option value="openai">OpenAI</Option>
                     <Option value="openai-compatible">OpenAI Compatible (第三方兼容接口)</Option>
+                    <Option value="lmstudio">LM Studio (本地模型)</Option>
                     <Option value="azure">Azure OpenAI</Option>
                     <Option value="anthropic">Anthropic</Option>
                     <Option value="custom">自定义</Option>

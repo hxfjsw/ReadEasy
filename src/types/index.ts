@@ -95,7 +95,7 @@ export interface WordBookItem extends Word {
 // AI配置
 export interface AIConfig {
   id?: number;
-  provider: 'openai' | 'openai-compatible' | 'azure' | 'anthropic' | 'custom';
+  provider: 'openai' | 'openai-compatible' | 'lmstudio' | 'azure' | 'anthropic' | 'custom';
   name: string;
   baseUrl: string;
   apiKey: string;
