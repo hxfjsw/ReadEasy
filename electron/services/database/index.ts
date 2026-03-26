@@ -386,7 +386,12 @@ export class DatabaseService {
     for (const [key, value] of Object.entries(data)) {
       const dbKey = key.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
       sets.push(`${dbKey} = ?`);
-      values.push(value);
+      // SQLite 不支持 boolean，转换为 0/1
+      if (typeof value === 'boolean') {
+        values.push(value ? 1 : 0);
+      } else {
+        values.push(value);
+      }
     }
     values.push(id);
     
