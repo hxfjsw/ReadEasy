@@ -41,21 +41,33 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
 
   // 加载书架数据
   const loadBooks = async () => {
+    console.log('[Bookshelf] loadBooks 开始...');
     setLoading(true);
     try {
       const records = await window.electron.ipcRenderer.invoke('db:getReadingRecords');
+      console.log('[Bookshelf] 获取到记录:', records);
+      
       // 过滤掉没有 filePath 的记录，并按最后阅读时间排序
       const validRecords = (records || [])
-        .filter((record: BookshelfItem) => record.filePath && record.filePath.trim() !== '')
+        .filter((record: BookshelfItem) => {
+          const hasPath = record.filePath && record.filePath.trim() !== '';
+          if (!hasPath) {
+            console.log('[Bookshelf] 过滤掉无路径记录:', record);
+          }
+          return hasPath;
+        })
         .sort((a: BookshelfItem, b: BookshelfItem) => {
           return new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime();
         });
+      
+      console.log('[Bookshelf] 有效记录数:', validRecords.length);
       setBooks(validRecords);
     } catch (error) {
-      console.error('加载书架失败:', error);
+      console.error('[Bookshelf] 加载书架失败:', error);
       message.error('加载书架失败');
     } finally {
       setLoading(false);
+      console.log('[Bookshelf] loadBooks 结束');
     }
   };
 
@@ -110,27 +122,40 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   // 打开文件选择对话框添加新书
   const handleAddBook = async () => {
     try {
+      console.log('[Bookshelf] 打开文件对话框...');
       const result = await window.electron.ipcRenderer.invoke('file:open');
+      console.log('[Bookshelf] 文件选择结果:', result);
+      
       if (!result.canceled && result.filePaths.length > 0) {
         const filePath = result.filePaths[0];
+        console.log('[Bookshelf] 选择的文件:', filePath);
+        
         // 读取文件信息
         const fileResult = await window.electron.ipcRenderer.invoke('file:read', filePath);
+        console.log('[Bookshelf] 文件读取结果:', fileResult);
+        
         if (fileResult.success) {
           const fileName = filePath.split(/[\\/]/).pop() || 'Unknown';
-          // 添加到书架
-          const addResult = await window.electron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
+          const bookData = {
             bookName: fileResult.metadata?.title || fileName,
             filePath: filePath,
             format: filePath.split('.').pop() || '',
             progress: 0,
             currentPosition: '0',
             bookmarks: '[]',
-          });
+          };
+          console.log('[Bookshelf] 准备添加到书架:', bookData);
+          
+          // 添加到书架
+          const addResult = await window.electron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', bookData);
+          console.log('[Bookshelf] 添加结果:', addResult);
           
           if (addResult) {
             message.success('已添加到书架');
+            console.log('[Bookshelf] 开始刷新书架...');
             // 立即重新加载书架数据
             await loadBooks();
+            console.log('[Bookshelf] 书架刷新完成, 当前书籍数:', books.length);
           } else {
             message.error('添加到书架失败');
           }
@@ -139,7 +164,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         }
       }
     } catch (error) {
-      console.error('添加书籍失败:', error);
+      console.error('[Bookshelf] 添加书籍失败:', error);
       message.error('添加书籍失败');
     }
   };
