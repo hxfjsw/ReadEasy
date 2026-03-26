@@ -39,11 +39,13 @@ describe('BookshelfPage 集成测试', () => {
         // 检查是否已存在
         const existing = mockBooks.find(b => b.filePath === data.filePath);
         if (existing) {
-          Object.assign(existing, data);
+          Object.assign(existing, { ...data, lastReadAt: new Date().toISOString() });
         } else {
+          // 模拟数据库自动添加 lastReadAt
           mockBooks.push({
             id: mockBooks.length + 1,
             ...data,
+            lastReadAt: new Date().toISOString(),
           });
         }
         return true;
@@ -91,7 +93,7 @@ describe('BookshelfPage 集成测试', () => {
   });
 
   it('完整流程：添加书籍 -> 显示在书架 -> 点击打开', async () => {
-    // 1. 先添加书籍到模拟数据库
+    // 1. 先添加书籍到模拟数据库（不传入 lastReadAt，模拟数据库自动添加）
     await mockElectron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
       bookName: 'Integration Test Book',
       filePath: 'C:/test/integration.txt',
@@ -99,7 +101,7 @@ describe('BookshelfPage 集成测试', () => {
       progress: 0,
       currentPosition: '0',
       bookmarks: '[]',
-      lastReadAt: new Date().toISOString(),
+      // 注意：不传入 lastReadAt，由数据库自动设置
     });
 
     // 2. 渲染书架
@@ -114,38 +116,67 @@ describe('BookshelfPage 集成测试', () => {
     expect(screen.getByText('TXT')).toBeInTheDocument();
   });
 
-  it('完整流程：添加多本书 -> 按时间排序', async () => {
-    // 添加旧书
-    const oldTime = new Date(Date.now() - 3600000).toISOString();
+  it('模拟真实场景：先打开空书架，然后添加书籍，应该立即显示', async () => {
+    // 1. 初始渲染空书架
+    const { rerender } = render(<BookshelfPage />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('书架空空如也')).toBeInTheDocument();
+    });
+
+    // 2. 模拟添加书籍到数据库
     await mockElectron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
+      bookName: 'New Added Book',
+      filePath: 'C:/test/new-book.txt',
+      format: 'txt',
+      progress: 0,
+      currentPosition: '0',
+      bookmarks: '[]',
+    });
+
+    // 验证数据库中有数据
+    expect(mockBooks).toHaveLength(1);
+
+    // 3. 重新渲染组件（模拟刷新后）
+    rerender(<BookshelfPage key="refresh" />);
+
+    // 4. 验证新书显示在书架
+    await waitFor(() => {
+      expect(screen.getByText('New Added Book')).toBeInTheDocument();
+    });
+
+    // 验证空状态消失
+    expect(screen.queryByText('书架空空如也')).not.toBeInTheDocument();
+  });
+
+  it('完整流程：添加多本书 -> 按时间排序', async () => {
+    // 添加旧书（1小时前）
+    mockBooks.push({
+      id: 1,
       bookName: 'Old Book',
       filePath: 'C:/test/old.txt',
       format: 'txt',
       progress: 10,
-      currentPosition: '100',
-      bookmarks: '[]',
-      lastReadAt: oldTime,
+      lastReadAt: new Date(Date.now() - 3600000).toISOString(), // 1小时前
     });
 
-    // 添加新书
-    const newTime = new Date().toISOString();
-    await mockElectron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
+    // 添加新书（现在）
+    mockBooks.push({
+      id: 2,
       bookName: 'New Book',
       filePath: 'C:/test/new.epub',
       format: 'epub',
       progress: 0,
-      currentPosition: '0',
-      bookmarks: '[]',
-      lastReadAt: newTime,
+      lastReadAt: new Date().toISOString(), // 现在
     });
 
     render(<BookshelfPage />);
 
-    // 验证新书在前
+    // 验证新书在前（按最后阅读时间倒序）
     await waitFor(() => {
-      const titles = screen.getAllByText(/Book$/);
-      expect(titles[0]).toHaveTextContent('New Book');
-      expect(titles[1]).toHaveTextContent('Old Book');
+      const cards = screen.getAllByText(/Book$/);
+      expect(cards[0]).toHaveTextContent('New Book');
+      expect(cards[1]).toHaveTextContent('Old Book');
     });
   });
 
