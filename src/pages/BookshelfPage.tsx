@@ -44,11 +44,13 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     setLoading(true);
     try {
       const records = await window.electron.ipcRenderer.invoke('db:getReadingRecords');
-      // 按最后阅读时间排序
-      const sortedRecords = (records || []).sort((a: BookshelfItem, b: BookshelfItem) => {
-        return new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime();
-      });
-      setBooks(sortedRecords);
+      // 过滤掉没有 filePath 的记录，并按最后阅读时间排序
+      const validRecords = (records || [])
+        .filter((record: BookshelfItem) => record.filePath && record.filePath.trim() !== '')
+        .sort((a: BookshelfItem, b: BookshelfItem) => {
+          return new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime();
+        });
+      setBooks(validRecords);
     } catch (error) {
       console.error('加载书架失败:', error);
       message.error('加载书架失败');
@@ -63,6 +65,13 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
 
   // 打开书籍
   const handleOpenBook = (book: BookshelfItem) => {
+    // 检查文件路径是否存在
+    if (!book.filePath) {
+      message.error('文件路径不存在');
+      console.error('Book filePath is undefined:', book);
+      return;
+    }
+    
     // 检查文件是否存在
     const checkFile = async () => {
       try {
@@ -80,6 +89,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
           message.error('文件不存在或已被移动');
         }
       } catch (error) {
+        console.error('打开文件失败:', error);
         message.error('打开文件失败');
       }
     };

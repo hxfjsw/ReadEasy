@@ -62,6 +62,13 @@ export function registerIPCHandlers(
 
   ipcMain.handle('file:read', async (_, filePath: string, options?: { maxContentSize?: number }) => {
     console.log('[IPC] file:read called with path:', filePath);
+    
+    // 参数校验
+    if (!filePath || typeof filePath !== 'string') {
+      console.error('[IPC] file:read error: Invalid filePath:', filePath);
+      return { success: false, error: 'Invalid file path' };
+    }
+    
     try {
       const ext = path.extname(filePath).toLowerCase();
       console.log('[IPC] file:read extension:', ext);
@@ -218,8 +225,20 @@ export function registerIPCHandlers(
 
   ipcMain.handle('db:addOrUpdateReadingRecord', async (_, data: any) => {
     console.log('[IPC] db:addOrUpdateReadingRecord called');
-    dbService.addOrUpdateReadingRecord(data);
-    return true;
+    
+    // 参数校验
+    if (!data || !data.filePath) {
+      console.error('[IPC] db:addOrUpdateReadingRecord error: Missing filePath');
+      return { success: false, error: 'Missing filePath' };
+    }
+    
+    try {
+      dbService.addOrUpdateReadingRecord(data);
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC] db:addOrUpdateReadingRecord error:', error);
+      return { success: false, error: error.message };
+    }
   });
 
   ipcMain.handle('db:deleteReadingRecord', async (_, id: number) => {
