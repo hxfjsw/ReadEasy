@@ -39,6 +39,9 @@ export interface WordDefinition {
   level?: string;
   synonyms?: string[];
   antonyms?: string[];
+  // 上下文分析
+  contextAnalysis?: string;
+  contextTranslation?: string;
 }
 
 // 单词

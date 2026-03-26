@@ -15,6 +15,9 @@ export interface WordDefinition {
   level?: string;
   synonyms?: string[];
   antonyms?: string[];
+  // 上下文分析
+  contextAnalysis?: string;
+  contextTranslation?: string;
 }
 
 export interface VocabularyAnalysis {
@@ -257,7 +260,21 @@ export class AIService {
 
   // 构建单词释义提示词
   private buildDefinitionPrompt(word: string, context?: string): string {
-    return `Please provide a detailed definition for the word "${word}"${context ? ` in the context: "${context}"` : ''}.
+    const contextSection = context ? `
+
+IMPORTANT - Context Analysis:
+The word appears in this context: "${context}"
+
+You MUST provide:
+1. contextAnalysis: Explain what this word means SPECIFICALLY in this context, and why it's used here. Analyze the context in detail.
+2. contextTranslation: Provide a natural Chinese translation of the entire context sentence/paragraph.
+` : '';
+
+    const contextFields = context ? `,
+  "contextAnalysis": "Detailed analysis of what the word means in this specific context, including cultural references, implied meanings, etc.",
+  "contextTranslation": "Natural Chinese translation of the entire context"` : '';
+
+    return `Please provide a detailed definition for the word "${word}".${contextSection}
 
 Return the result in the following JSON format:
 {
@@ -274,7 +291,7 @@ Return the result in the following JSON format:
   ],
   "level": "vocabulary level (elementary, middle, high, cet4, cet6, postgraduate, ielts, toefl, gre, tem8)",
   "synonyms": ["synonym1", "synonym2"],
-  "antonyms": ["antonym1", "antonym2"]
+  "antonyms": ["antonym1", "antonym2"]${contextFields}
 }`;
   }
 
@@ -338,6 +355,8 @@ Return the result in the following JSON format:
       level: result.level,
       synonyms: Array.isArray(result.synonyms) ? result.synonyms : [],
       antonyms: Array.isArray(result.antonyms) ? result.antonyms : [],
+      contextAnalysis: result.context_analysis || result.contextAnalysis,
+      contextTranslation: result.context_translation || result.contextTranslation,
     };
   }
 

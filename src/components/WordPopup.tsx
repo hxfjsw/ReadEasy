@@ -172,11 +172,30 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
           </div>
         )}
 
-        {/* 上下文 */}
+        {/* 上下文分析和翻译 */}
         {context && (
-          <div className="bg-gray-50 p-3 rounded">
-            <div className="text-gray-500 text-sm mb-1">原文上下文</div>
-            <div className="text-gray-700 italic">{context}</div>
+          <div className="space-y-3">
+            {/* 原文上下文 */}
+            <div className="bg-gray-50 p-3 rounded">
+              <div className="text-gray-500 text-sm mb-1">原文上下文</div>
+              <div className="text-gray-700 italic">{context}</div>
+            </div>
+
+            {/* 上下文翻译 */}
+            {definition.contextTranslation && (
+              <div className="bg-blue-50 p-3 rounded border-l-4 border-blue-400">
+                <div className="text-blue-600 text-sm mb-1 font-medium">上下文翻译</div>
+                <div className="text-gray-800">{definition.contextTranslation}</div>
+              </div>
+            )}
+
+            {/* 上下文分析 */}
+            {definition.contextAnalysis && (
+              <div className="bg-green-50 p-3 rounded border-l-4 border-green-400">
+                <div className="text-green-600 text-sm mb-1 font-medium">上下文分析</div>
+                <div className="text-gray-800 leading-relaxed">{definition.contextAnalysis}</div>
+              </div>
+            )}
           </div>
         )}
 
