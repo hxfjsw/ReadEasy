@@ -81,6 +81,9 @@ export interface AIConfig {
   temperature: number;
   maxTokens: number;
   isDefault?: boolean;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  customPrompt?: string;
   createdAt?: Date;
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Select, Slider, Input, Button, Tabs, message, InputNumber, Space, Table, Popconfirm, Switch } from 'antd';
+import { Card, Form, Select, Slider, Input, Button, Tabs, message, InputNumber, Space, Table, Popconfirm, Switch, Collapse, Tag } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, CheckOutlined } from '@ant-design/icons';
 import { useSettingsStore } from '../stores/settingsStore';
 import { VocabularyLevelLabels, AIConfig } from '../types';
@@ -100,6 +100,9 @@ const SettingsPage: React.FC = () => {
         temperature: values.temperature || 0.3,
         maxTokens: values.maxTokens || 2000,
         isDefault: values.isDefault,
+        sourceLanguage: values.sourceLanguage || 'en',
+        targetLanguage: values.targetLanguage || 'zh-CN',
+        customPrompt: values.customPrompt,
       };
 
       if (editingConfig?.id) {
@@ -130,6 +133,9 @@ const SettingsPage: React.FC = () => {
       temperature: config.temperature,
       maxTokens: config.maxTokens,
       isDefault: config.isDefault,
+      sourceLanguage: config.sourceLanguage || 'en',
+      targetLanguage: config.targetLanguage || 'zh-CN',
+      customPrompt: config.customPrompt,
     });
     setShowAIForm(true);
   };
@@ -367,6 +373,69 @@ const SettingsPage: React.FC = () => {
                 >
                   <InputNumber min={100} max={8000} step={100} />
                 </Form.Item>
+
+                <Collapse ghost className="mb-4">
+                  <Collapse.Panel header="翻译设置（可选）" key="translation">
+                    <Space direction="vertical" className="w-full">
+                      <Form.Item
+                        label="来源语言"
+                        name="sourceLanguage"
+                        initialValue="en"
+                        className="mb-2"
+                      >
+                        <Select placeholder="选择来源语言">
+                          <Option value="en">English (英语)</Option>
+                          <Option value="zh-CN">Chinese (中文)</Option>
+                          <Option value="ja">Japanese (日语)</Option>
+                          <Option value="ko">Korean (韩语)</Option>
+                          <Option value="fr">French (法语)</Option>
+                          <Option value="de">German (德语)</Option>
+                          <Option value="es">Spanish (西班牙语)</Option>
+                          <Option value="ru">Russian (俄语)</Option>
+                        </Select>
+                      </Form.Item>
+
+                      <Form.Item
+                        label="目标语言"
+                        name="targetLanguage"
+                        initialValue="zh-CN"
+                        className="mb-2"
+                      >
+                        <Select placeholder="选择目标语言">
+                          <Option value="zh-CN">Chinese (中文)</Option>
+                          <Option value="en">English (英语)</Option>
+                          <Option value="ja">Japanese (日语)</Option>
+                          <Option value="ko">Korean (韩语)</Option>
+                          <Option value="fr">French (法语)</Option>
+                          <Option value="de">German (德语)</Option>
+                          <Option value="es">Spanish (西班牙语)</Option>
+                          <Option value="ru">Russian (俄语)</Option>
+                        </Select>
+                      </Form.Item>
+
+                      <Form.Item
+                        label="自定义提示词"
+                        name="customPrompt"
+                        className="mb-2"
+                        extra={
+                          <div className="text-xs text-gray-500 mt-1">
+                            可用变量：
+                            <Tag>{'{{'}text{'}}'}</Tag>
+                            <Tag>{'{{'}sourceLanguage{'}}'}</Tag>
+                            <Tag>{'{{'}targetLanguage{'}}'}</Tag>
+                          </div>
+                        }
+                      >
+                        <Input.TextArea
+                          rows={4}
+                          placeholder={`Translate the following {{sourceLanguage}} text to {{targetLanguage}}:
+
+{{text}}`}
+                        />
+                      </Form.Item>
+                    </Space>
+                  </Collapse.Panel>
+                </Collapse>
 
                 <Form.Item
                   label="设为默认"

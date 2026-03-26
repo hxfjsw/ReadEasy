@@ -64,6 +64,10 @@ export const aiConfigs = sqliteTable('ai_configs', {
   temperature: real('temperature').notNull().default(0.3),
   maxTokens: integer('max_tokens').notNull().default(2000),
   isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+  // 翻译相关设置
+  sourceLanguage: text('source_language').default('en'),
+  targetLanguage: text('target_language').default('zh-CN'),
+  customPrompt: text('custom_prompt'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 

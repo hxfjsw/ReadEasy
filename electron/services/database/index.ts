@@ -112,6 +112,9 @@ export class DatabaseService {
         temperature REAL NOT NULL DEFAULT 0.3,
         max_tokens INTEGER NOT NULL DEFAULT 2000,
         is_default INTEGER NOT NULL DEFAULT 0,
+        source_language TEXT DEFAULT 'en',
+        target_language TEXT DEFAULT 'zh-CN',
+        custom_prompt TEXT,
         created_at INTEGER NOT NULL DEFAULT (unixepoch())
       )
     `);
@@ -134,6 +137,28 @@ export class DatabaseService {
     
     // 迁移：为 word_book_items 添加复习相关字段
     this.migrateWordBookItems();
+    
+    // 迁移：为 ai_configs 添加翻译相关字段
+    this.migrateAIConfigs();
+  }
+  
+  private migrateAIConfigs(): void {
+    // 检查是否需要添加翻译相关字段
+    const tableInfo = this.db.prepare(`PRAGMA table_info(ai_configs)`).all() as any[];
+    
+    const hasSourceLanguage = tableInfo.some(col => col.name === 'source_language');
+    const hasTargetLanguage = tableInfo.some(col => col.name === 'target_language');
+    const hasCustomPrompt = tableInfo.some(col => col.name === 'custom_prompt');
+    
+    if (!hasSourceLanguage) {
+      this.db.exec(`ALTER TABLE ai_configs ADD COLUMN source_language TEXT DEFAULT 'en'`);
+    }
+    if (!hasTargetLanguage) {
+      this.db.exec(`ALTER TABLE ai_configs ADD COLUMN target_language TEXT DEFAULT 'zh-CN'`);
+    }
+    if (!hasCustomPrompt) {
+      this.db.exec(`ALTER TABLE ai_configs ADD COLUMN custom_prompt TEXT`);
+    }
   }
   
   private migrateWordBookItems(): void {
@@ -358,6 +383,9 @@ export class DatabaseService {
       temperature: row.temperature,
       maxTokens: row.max_tokens,
       isDefault: row.is_default === 1,
+      sourceLanguage: row.source_language || 'en',
+      targetLanguage: row.target_language || 'zh-CN',
+      customPrompt: row.custom_prompt,
       createdAt: row.created_at,
     };
   }
@@ -374,8 +402,8 @@ export class DatabaseService {
 
   addAIConfig(data: schema.NewAIConfig): number {
     const result = this.db.prepare(`
-      INSERT INTO ai_configs (provider, name, base_url, api_key, model, temperature, max_tokens, is_default)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO ai_configs (provider, name, base_url, api_key, model, temperature, max_tokens, is_default, source_language, target_language, custom_prompt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       data.provider,
       data.name,
@@ -384,7 +412,10 @@ export class DatabaseService {
       data.model,
       data.temperature || 0.3,
       data.maxTokens || 2000,
-      data.isDefault ? 1 : 0
+      data.isDefault ? 1 : 0,
+      data.sourceLanguage || 'en',
+      data.targetLanguage || 'zh-CN',
+      data.customPrompt || null
     );
     
     const id = Number(result.lastInsertRowid);

@@ -132,14 +132,41 @@ export class AIService {
   async translateSentence(text: string, configId?: number): Promise<string> {
     const { client, config } = await this.getClient(configId);
     
-    const prompt = `Translate the following English text to Chinese. Only return the translation, no explanation:\n\n${text}`;
+    // 使用用户自定义提示词或默认提示词
+    const sourceLang = config.sourceLanguage || 'en';
+    const targetLang = config.targetLanguage || 'zh-CN';
+    
+    let prompt: string;
+    if (config.customPrompt && config.customPrompt.trim()) {
+      // 使用用户自定义提示词，替换变量
+      prompt = config.customPrompt
+        .replace(/\{\{text\}\}/g, text)
+        .replace(/\{\{sourceLanguage\}\}/g, sourceLang)
+        .replace(/\{\{targetLanguage\}\}/g, targetLang);
+    } else {
+      // 默认提示词
+      const langMap: Record<string, string> = {
+        'en': 'English',
+        'zh-CN': 'Chinese',
+        'zh': 'Chinese',
+        'ja': 'Japanese',
+        'ko': 'Korean',
+        'fr': 'French',
+        'de': 'German',
+        'es': 'Spanish',
+        'ru': 'Russian',
+      };
+      const sourceLangName = langMap[sourceLang] || sourceLang;
+      const targetLangName = langMap[targetLang] || targetLang;
+      prompt = `Translate the following ${sourceLangName} text to ${targetLangName}. Only return the translation, no explanation:\n\n${text}`;
+    }
     
     try {
       const response = await client.chat.completions.create({
         model: config.model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 1000,
+        temperature: config.temperature || 0.3,
+        max_tokens: config.maxTokens || 2000,
       });
 
       return response.choices[0]?.message?.content?.trim() || '';
@@ -159,8 +186,8 @@ export class AIService {
       const response = await client.chat.completions.create({
         model: config.model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 2000,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens,
         response_format: { type: 'json_object' },
       });
 
@@ -173,117 +200,110 @@ export class AIService {
       return this.normalizeVocabularyAnalysis(result);
     } catch (error: any) {
       console.error('Failed to analyze vocabulary:', error);
-      throw new Error(`Failed to analyze: ${error.message}`);
+      throw new Error(`Failed to analyze vocabulary: ${error.message}`);
     }
   }
 
   // 生成例句
-  async generateExampleSentence(word: string, level: string, configId?: number): Promise<string> {
+  async generateExampleSentence(word: string, level: string, configId?: number): Promise<{ sentence: string; translation: string }> {
     const { client, config } = await this.getClient(configId);
     
-    const levelDescriptions: Record<string, string> = {
-      elementary: 'elementary school students',
-      middle: 'middle school students',
-      high: 'high school students',
-      cet4: 'CET-4 level students',
-      cet6: 'CET-6 level students',
-      postgraduate: 'postgraduate entrance exam students',
-      ielts: 'IELTS test takers',
-      toefl: 'TOEFL test takers',
-      gre: 'GRE test takers',
-      tem8: 'TEM-8 level students',
-    };
-
-    const targetAudience = levelDescriptions[level] || 'English learners';
-    const prompt = `Generate a simple, natural example sentence using the word "${word}" suitable for ${targetAudience}. Only return the sentence, nothing else.`;
+    const prompt = this.buildExamplePrompt(word, level);
     
     try {
       const response = await client.chat.completions.create({
         model: config.model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 200,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens,
+        response_format: { type: 'json_object' },
       });
 
-      return response.choices[0]?.message?.content?.trim() || '';
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response from AI');
+      }
+
+      const result = JSON.parse(content);
+      return {
+        sentence: result.sentence || result.example || '',
+        translation: result.translation || result.chinese || '',
+      };
     } catch (error: any) {
       console.error('Failed to generate example:', error);
       throw new Error(`Failed to generate example: ${error.message}`);
     }
   }
 
-  // 构建单词释义 Prompt
+  // 构建单词释义提示词
   private buildDefinitionPrompt(word: string, context?: string): string {
-    return `You are an English dictionary assistant. Provide detailed information for the word "${word}".
-${context ? `Context: "${context}"` : ''}
+    return `Please provide a detailed definition for the word "${word}"${context ? ` in the context: "${context}"` : ''}.
 
-Please respond in JSON format with the following structure:
+Return the result in the following JSON format:
 {
   "word": "${word}",
-  "phonetic_uk": "British phonetic notation (IPA)",
-  "phonetic_us": "American phonetic notation (IPA)",
+  "phoneticUk": "British phonetic symbol",
+  "phoneticUs": "American phonetic symbol",
   "definitions": [
     {
-      "pos": "part of speech (noun/verb/adjective/adverb/etc.)",
-      "meaning_cn": "Chinese meaning",
-      "meaning_en": "English meaning",
-      "examples": ["example sentence 1", "example sentence 2"]
+      "pos": "part of speech (n., v., adj., adv., etc.)",
+      "meaningCn": "Chinese meaning",
+      "meaningEn": "English meaning",
+      "examples": ["Example sentence 1", "Example sentence 2"]
     }
   ],
-  "level": "difficulty level (elementary/middle/high/cet4/cet6/postgraduate/ielts/toefl/gre/tem8)",
+  "level": "vocabulary level (elementary, middle, high, cet4, cet6, postgraduate, ielts, toefl, gre, tem8)",
   "synonyms": ["synonym1", "synonym2"],
   "antonyms": ["antonym1", "antonym2"]
-}
-
-Requirements:
-1. Provide at least 2 definitions if the word has multiple meanings
-2. Include 1-2 example sentences for each definition
-3. Use standard IPA for phonetic notation
-4. Level should be based on word frequency and difficulty
-5. If context is provided, prioritize the meaning used in that context`;
+}`;
   }
 
-  // 构建词汇分析 Prompt
+  // 构建词汇分析提示词
   private buildVocabularyAnalysisPrompt(text: string): string {
-    return `Analyze the vocabulary in the following text and identify words by difficulty level.
+    return `Analyze the vocabulary difficulty of the following English text. Identify words that are at different levels (elementary, middle, high, cet4, cet6, postgraduate, ielts, toefl, gre, tem8).
 
-Text: """${text.slice(0, 2000)}"""
+Text: ${text.slice(0, 1000)}
 
-Respond in JSON format:
+Return the result in the following JSON format:
 {
   "words": [
     {
-      "word": "the word",
-      "level": "elementary|middle|high|cet4|cet6|postgraduate|ielts|toefl|gre|tem8",
+      "word": "example",
+      "level": "cet4",
       "frequency": 1
     }
   ],
   "statistics": {
-    "total_words": 100,
-    "unique_words": 50,
-    "by_level": {
+    "totalWords": 100,
+    "uniqueWords": 50,
+    "byLevel": {
       "elementary": 10,
       "middle": 15,
       "high": 10,
       "cet4": 8,
       "cet6": 4,
-      "postgraduate": 1,
-      "ielts": 1,
-      "toefl": 1,
-      "gre": 0,
+      "postgraduate": 2,
+      "ielts": 0,
+      "toefl": 0,
+      "gre": 1,
       "tem8": 0
     }
   }
-}
-
-Requirements:
-1. Only include content words (nouns, verbs, adjectives, adverbs), exclude common function words
-2. Use base form of words (lemmatize)
-3. Level classification based on standard word lists
-4. Frequency is the number of occurrences in the text`;
+}`;
   }
 
-  // 规范化定义结果
+  // 构建例句生成提示词
+  private buildExamplePrompt(word: string, level: string): string {
+    return `Generate an example sentence using the word "${word}" suitable for ${level} level English learners.
+
+Return the result in the following JSON format:
+{
+  "sentence": "The example sentence using the word.",
+  "translation": "中文翻译"
+}`;
+  }
+
+  // 规范化单词释义结果
   private normalizeDefinition(result: any): WordDefinition {
     return {
       word: result.word || '',
@@ -304,15 +324,11 @@ Requirements:
   // 规范化词汇分析结果
   private normalizeVocabularyAnalysis(result: any): VocabularyAnalysis {
     return {
-      words: Array.isArray(result.words) ? result.words.map((w: any) => ({
-        word: w.word || '',
-        level: w.level || 'unknown',
-        frequency: w.frequency || 1,
-      })) : [],
+      words: Array.isArray(result.words) ? result.words : [],
       statistics: {
-        totalWords: result.statistics?.total_words || 0,
-        uniqueWords: result.statistics?.unique_words || 0,
-        byLevel: result.statistics?.by_level || {},
+        totalWords: result.statistics?.totalWords || 0,
+        uniqueWords: result.statistics?.uniqueWords || 0,
+        byLevel: result.statistics?.byLevel || {},
       },
     };
   }
