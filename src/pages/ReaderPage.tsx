@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button, message, Tag, Spin, Empty, Drawer, Slider, Select, Tooltip, Progress, Card, Divider } from 'antd';
-import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined, TranslationOutlined, CloseOutlined } from '@ant-design/icons';
+import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined, TranslationOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined } from '@ant-design/icons';
 import WordPopup from '../components/WordPopup';
 import { useSettingsStore } from '../stores/settingsStore';
 import { VocabularyLevel, VocabularyLevelLabels } from '../types';
@@ -76,6 +76,14 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const [sentencePopupVisible, setSentencePopupVisible] = useState(false);
   const [sentenceTranslating, setSentenceTranslating] = useState(false);
   const sentencePopupRef = useRef<HTMLDivElement>(null);
+  
+  // 全文朗读状态
+  const [isReadingAloud, setIsReadingAloud] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [currentSentenceIndex, setCurrentSentenceIndex] = useState<number>(-1);
+  const [sentences, setSentences] = useState<string[]>([]);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const highlightRef = useRef<HTMLSpanElement | null>(null);
   
   // 已掌握单词列表（从用户设置中加载）
   const [knownWords, setKnownWords] = useState<Set<string>>(new Set());
@@ -457,6 +465,145 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
     }
   };
 
+  // 将文本分割成句子
+  const splitIntoSentences = (text: string): string[] => {
+    // 按句号、问号、感叹号分割，但保留这些标点
+    const sentenceRegex = /[^.!?]+[.!?]+["']?\s*/g;
+    const matches = text.match(sentenceRegex);
+    if (matches) {
+      return matches.map(s => s.trim()).filter(s => s.length > 0);
+    }
+    // 如果没有匹配到，按行分割
+    return text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+  };
+
+  // 开始全文朗读
+  const startReadingAloud = () => {
+    if (!fileContent || !('speechSynthesis' in window)) {
+      message.warning('您的浏览器不支持语音播放');
+      return;
+    }
+    
+    // 如果正在暂停状态，继续播放
+    if (isPaused && isReadingAloud) {
+      window.speechSynthesis.resume();
+      setIsPaused(false);
+      return;
+    }
+    
+    // 分割句子
+    const sentenceList = splitIntoSentences(fileContent);
+    setSentences(sentenceList);
+    setIsReadingAloud(true);
+    setIsPaused(false);
+    setCurrentSentenceIndex(0);
+    
+    // 开始朗读第一句
+    speakSentence(0, sentenceList);
+  };
+
+  // 朗读单个句子
+  const speakSentence = (index: number, sentenceList: string[]) => {
+    if (index >= sentenceList.length) {
+      // 朗读完成
+      setIsReadingAloud(false);
+      setIsPaused(false);
+      setCurrentSentenceIndex(-1);
+      return;
+    }
+    
+    setCurrentSentenceIndex(index);
+    
+    const utterance = new SpeechSynthesisUtterance(sentenceList[index]);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    
+    utterance.onend = () => {
+      // 播放下一句
+      if (isReadingAloud && !isPaused) {
+        speakSentence(index + 1, sentenceList);
+      }
+    };
+    
+    utterance.onerror = (event) => {
+      console.error('Speech synthesis error:', event);
+      if (event.error !== 'canceled' && event.error !== 'interrupted') {
+        setIsReadingAloud(false);
+        setIsPaused(false);
+      }
+    };
+    
+    utteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+    
+    // 滚动到当前句子
+    scrollToSentence(sentenceList[index]);
+  };
+
+  // 暂停朗读
+  const pauseReadingAloud = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.pause();
+      setIsPaused(true);
+    }
+  };
+
+  // 停止朗读
+  const stopReadingAloud = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsReadingAloud(false);
+    setIsPaused(false);
+    setCurrentSentenceIndex(-1);
+    utteranceRef.current = null;
+  };
+
+  // 滚动到当前朗读的句子
+  const scrollToSentence = (sentence: string) => {
+    if (!contentRef.current) return;
+    
+    // 查找包含该句子的元素
+    const contentDiv = contentRef.current;
+    const textNodes: Node[] = [];
+    
+    // 获取所有文本节点
+    const walker = document.createTreeWalker(
+      contentDiv,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.textContent?.includes(sentence.slice(0, 30))) {
+        textNodes.push(node);
+        break;
+      }
+    }
+    
+    if (textNodes.length > 0) {
+      const range = document.createRange();
+      range.selectNode(textNodes[0]);
+      const rect = range.getBoundingClientRect();
+      const containerRect = contentDiv.getBoundingClientRect();
+      
+      // 滚动到视图中
+      const scrollTop = contentDiv.scrollTop + rect.top - containerRect.top - 100;
+      contentDiv.scrollTo({ top: scrollTop, behavior: 'smooth' });
+    }
+  };
+
+  // 组件卸载时停止朗读
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
   // 判断单词是否是生词
   const isUnknownWord = (word: string): boolean => {
     const lowerWord = word.toLowerCase();
@@ -585,6 +732,44 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
 
   const themeStyles = getThemeStyles();
 
+  // 渲染带高亮的朗读内容
+  const renderHighlightedContent = () => {
+    return (
+      <div 
+        className={`reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} min-h-full shadow-sm`}
+        style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
+      >
+        <div className={`mb-6 pb-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+          <h2 className={`text-2xl font-bold ${themeStyles.text}`}>{fileName}</h2>
+          <div className="flex items-center gap-4 mt-2">
+            <Tag color="blue">朗读中</Tag>
+            <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+              第 {currentSentenceIndex + 1} / {sentences.length} 句
+            </span>
+          </div>
+        </div>
+        <div className={`${themeStyles.text} whitespace-pre-wrap`}>
+          {sentences.map((sentence, index) => (
+            <span
+              key={index}
+              ref={index === currentSentenceIndex ? highlightRef : null}
+              className={`transition-all duration-300 rounded px-1 ${
+                index === currentSentenceIndex
+                  ? 'bg-yellow-200 text-yellow-900 font-medium'
+                  : index < currentSentenceIndex
+                  ? 'text-gray-400'
+                  : ''
+              }`}
+            >
+              {renderClickableContent(sentence)}
+              {' '}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // 渲染加载状态
   const renderLoading = () => {
     const stageMessages: Record<string, string> = {
@@ -629,6 +814,11 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           </Button>
         </Empty>
       );
+    }
+
+    // 如果使用全文朗读，渲染带高亮的版本
+    if (isReadingAloud && sentences.length > 0) {
+      return renderHighlightedContent();
     }
 
     return (
@@ -688,6 +878,48 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
             进度: {readingProgress}%
           </span>
+          
+          {/* 全文朗读按钮 */}
+          {fileContent && (
+            <>
+              {!isReadingAloud ? (
+                <Button
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
+                  onClick={startReadingAloud}
+                >
+                  朗读
+                </Button>
+              ) : (
+                <>
+                  {isPaused ? (
+                    <Button
+                      type="primary"
+                      icon={<PlayCircleOutlined />}
+                      onClick={startReadingAloud}
+                    >
+                      继续
+                    </Button>
+                  ) : (
+                    <Button
+                      icon={<PauseCircleOutlined />}
+                      onClick={pauseReadingAloud}
+                    >
+                      暂停
+                    </Button>
+                  )}
+                  <Button
+                    danger
+                    icon={<StopOutlined />}
+                    onClick={stopReadingAloud}
+                  >
+                    停止
+                  </Button>
+                </>
+              )}
+            </>
+          )}
+          
           <Button
             icon={<SettingOutlined />}
             onClick={() => setSettingsDrawerOpen(true)}
