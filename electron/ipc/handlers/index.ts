@@ -4,12 +4,14 @@ import * as path from 'path';
 import { DatabaseService } from '../../services/database';
 import { AIService } from '../../services/ai';
 import { ParserService } from '../../services/parser';
+import { GoogleTranslationService } from '../../services/translation';
 
 export function registerIPCHandlers(
   dbService: DatabaseService,
   aiService: AIService
 ): void {
   const parserService = new ParserService();
+  const googleTranslateService = new GoogleTranslationService();
   
   console.log('[IPC] Registering IPC handlers...');
   
@@ -284,6 +286,27 @@ export function registerIPCHandlers(
     }
   });
 
+  // Google 免费翻译服务（默认）
+  ipcMain.handle('google:translate', async (_, params: { text: string; targetLang?: string }) => {
+    console.log('[IPC] google:translate called');
+    try {
+      const result = await googleTranslateService.translate({
+        text: params.text,
+        targetLang: params.targetLang || 'zh-CN',
+      });
+      return { success: true, data: result.translatedText };
+    } catch (error: any) {
+      console.error('[IPC] google:translate error:', error);
+      return { success: false, message: error.message || '翻译失败' };
+    }
+  });
+
+  ipcMain.handle('google:testConnection', async () => {
+    console.log('[IPC] google:testConnection called');
+    return googleTranslateService.testConnection();
+  });
+
+  // AI 翻译（需要配置 API key）
   ipcMain.handle('ai:translate', async (_, params: { text: string; configId?: number }) => {
     console.log('[IPC] ai:translate called');
     try {

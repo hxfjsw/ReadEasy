@@ -60,11 +60,11 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
           }
           return hasPath;
         })
-        .map((record: BookshelfItem) => ({
+        .map((record: BookshelfItem): BookshelfItem => ({
           ...record,
-          // 统一转换为驼峰格式
-          filePath: record.filePath || record.file_path,
-          lastReadAt: record.lastReadAt || record.last_read_at,
+          // 统一转换为驼峰格式（filter 已经确保有 path）
+          filePath: (record.filePath || record.file_path) as string,
+          lastReadAt: (record.lastReadAt || record.last_read_at) as Date,
         }))
         .sort((a: BookshelfItem, b: BookshelfItem) => {
           return new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime();
