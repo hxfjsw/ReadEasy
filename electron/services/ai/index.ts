@@ -42,13 +42,19 @@ export class AIService {
   private async getClient(configId?: number): Promise<{ client: OpenAI; config: AIConfig }> {
     let config: AIConfig | undefined;
     
+    console.log('[AIService] getClient called with configId:', configId);
+    
     if (configId) {
       const configs = this.dbService.getAIConfigs();
+      console.log('[AIService] Available configs:', configs.map(c => ({ id: c.id, name: c.name, baseUrl: c.baseUrl })));
       config = configs.find(c => c.id === configId);
+      console.log('[AIService] Found config by ID:', config);
     }
     
     if (!config) {
+      console.log('[AIService] No config found by ID, getting default...');
       config = this.dbService.getDefaultAIConfig();
+      console.log('[AIService] Default config:', config);
     }
     
     if (!config) {
@@ -58,6 +64,13 @@ export class AIService {
     if (!config.apiKey) {
       throw new Error('API key is not configured');
     }
+
+    console.log('[AIService] Using config:', { 
+      id: config.id, 
+      name: config.name, 
+      baseUrl: config.baseUrl,
+      provider: config.provider 
+    });
 
     // 使用配置ID和baseUrl的组合作为缓存key，确保配置变更时重新创建客户端
     const cacheKey = `${config.id}_${config.baseUrl}`;
@@ -71,6 +84,8 @@ export class AIService {
         baseURL: config.baseUrl,
       });
       this.clients.set(cacheKey, client);
+    } else {
+      console.log('[AIService] Using cached client for:', cacheKey);
     }
 
     return { client, config };

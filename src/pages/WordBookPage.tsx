@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input } from 'antd';
-import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input, Divider } from 'antd';
+import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined, SoundOutlined } from '@ant-design/icons';
 import { WordBook, WordBookItem } from '../types';
 
 const WordBookPage: React.FC = () => {
@@ -13,6 +13,10 @@ const WordBookPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [createForm] = Form.useForm();
   const [creating, setCreating] = useState(false);
+  
+  // 单词详情弹窗
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedWord, setSelectedWord] = useState<WordBookItem | null>(null);
 
   useEffect(() => {
     loadWordBooks();
@@ -181,6 +185,30 @@ const WordBookPage: React.FC = () => {
     return labels[level] || level;
   };
 
+  // 播放单词发音
+  const playWordPronunciation = (word: string) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.8;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      message.warning('您的浏览器不支持语音播放');
+    }
+  };
+
+  // 显示单词详情
+  const showWordDetail = (word: WordBookItem) => {
+    setSelectedWord(word);
+    setDetailModalVisible(true);
+  };
+
+  // 关闭单词详情
+  const closeWordDetail = () => {
+    setDetailModalVisible(false);
+    setSelectedWord(null);
+  };
+
   return (
     <div className="h-full flex">
       {/* Sidebar - Word Book List */}
@@ -258,15 +286,36 @@ const WordBookPage: React.FC = () => {
                 <List.Item>
                   <Card
                     size="small"
-                    className="w-full"
+                    className="w-full cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => showWordDetail(word)}
                     actions={[
+                      <Button
+                        type="text"
+                        icon={<SoundOutlined />}
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playWordPronunciation(word.word);
+                        }}
+                      >
+                        朗读
+                      </Button>,
                       <Popconfirm
                         title="确定删除这个单词吗？"
-                        onConfirm={() => handleDeleteWord(word.id)}
+                        onConfirm={(e) => {
+                          e?.stopPropagation();
+                          handleDeleteWord(word.id);
+                        }}
                         okText="确定"
                         cancelText="取消"
                       >
-                        <Button type="text" danger icon={<DeleteOutlined />} size="small">
+                        <Button 
+                          type="text" 
+                          danger 
+                          icon={<DeleteOutlined />} 
+                          size="small"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           删除
                         </Button>
                       </Popconfirm>,
@@ -323,6 +372,87 @@ const WordBookPage: React.FC = () => {
             <Input.TextArea rows={3} placeholder="添加一些描述..." />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 单词详情弹窗 */}
+      <Modal
+        title={null}
+        open={detailModalVisible}
+        onCancel={closeWordDetail}
+        footer={[
+          <Button key="close" onClick={closeWordDetail}>
+            关闭
+          </Button>,
+          <Button
+            key="play"
+            type="primary"
+            icon={<SoundOutlined />}
+            onClick={() => selectedWord && playWordPronunciation(selectedWord.word)}
+          >
+            朗读
+          </Button>,
+        ]}
+        width={500}
+      >
+        {selectedWord && (
+          <div className="py-4">
+            {/* 单词标题 */}
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="text-3xl font-bold text-gray-800">{selectedWord.word}</h2>
+              <Tag color={getLevelColor(selectedWord.level)}>
+                {getLevelLabel(selectedWord.level)}
+              </Tag>
+            </div>
+
+            {/* 音标 */}
+            {(selectedWord.phoneticUs || selectedWord.phoneticUk) && (
+              <div className="mb-4 text-gray-600">
+                {selectedWord.phoneticUs && (
+                  <span className="mr-4">美 /{selectedWord.phoneticUs}/</span>
+                )}
+                {selectedWord.phoneticUk && (
+                  <span>英 /{selectedWord.phoneticUk}/</span>
+                )}
+              </div>
+            )}
+
+            <Divider />
+
+            {/* 释义 */}
+            {selectedWord.definitionCn && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">中文释义</h4>
+                <p className="text-gray-800 leading-relaxed">{selectedWord.definitionCn}</p>
+              </div>
+            )}
+
+            {selectedWord.definitionEn && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-gray-500 mb-2">英文释义</h4>
+                <p className="text-gray-800 leading-relaxed">{selectedWord.definitionEn}</p>
+              </div>
+            )}
+
+            {/* 原文上下文 */}
+            {selectedWord.context && (
+              <>
+                <Divider />
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">原文上下文</h4>
+                  <p className="text-gray-600 italic bg-gray-50 p-3 rounded">
+                    "{selectedWord.context}"
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* 添加时间 */}
+            <Divider />
+            <div className="text-xs text-gray-400">
+              添加于: {new Date(selectedWord.addedAt).toLocaleString('zh-CN')}
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
