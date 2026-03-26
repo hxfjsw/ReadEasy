@@ -5,16 +5,18 @@ import {
   ReadOutlined,
   SettingOutlined,
   BookFilled,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import ReaderPage from './pages/ReaderPage';
 import WordBookPage from './pages/WordBookPage';
 import SettingsPage from './pages/SettingsPage';
 import BookshelfPage from './pages/BookshelfPage';
+import MasteredWordsPage from './pages/MasteredWordsPage';
 import { useSettingsStore } from './stores/settingsStore';
 
 const { Sider, Content } = Layout;
 
-type PageType = 'reader' | 'bookshelf' | 'wordbook' | 'settings';
+type PageType = 'reader' | 'bookshelf' | 'wordbook' | 'mastered' | 'settings';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('bookshelf');
@@ -67,6 +69,11 @@ function App() {
       label: '单词本',
     },
     {
+      key: 'mastered',
+      icon: <CheckCircleOutlined />,
+      label: '熟词本',
+    },
+    {
       key: 'settings',
       icon: <SettingOutlined />,
       label: '设置',
@@ -93,6 +100,9 @@ function App() {
         </div>
         <div style={{ display: currentPage === 'wordbook' ? 'block' : 'none', height: '100%' }}>
           <WordBookPage />
+        </div>
+        <div style={{ display: currentPage === 'mastered' ? 'block' : 'none', height: '100%' }}>
+          <MasteredWordsPage />
         </div>
         <div style={{ display: currentPage === 'settings' ? 'block' : 'none', height: '100%' }}>
           <SettingsPage />
