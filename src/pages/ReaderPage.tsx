@@ -1067,69 +1067,82 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         </div>
       </div>
 
-      {/* Content Area */}
-      <div 
-        ref={contentRef}
-        className={`flex-1 overflow-hidden ${themeStyles.bg} relative`}
-        onMouseUp={handleMouseUp}
-      >
-        {loadingState.isLoading ? (
-          renderLoading()
-        ) : (
-          renderContent()
-        )}
-        
-        {/* 句子翻译弹窗 */}
-        {sentencePopupVisible && (
-          <Card
-            ref={sentencePopupRef}
-            className="absolute z-50 shadow-lg max-w-md"
-            style={{
-              top: '20%',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              minWidth: '300px',
-            }}
-            title={
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <TranslationOutlined />
-                  句子翻译
-                </span>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CloseOutlined />}
-                  onClick={closeSentencePopup}
-                />
-              </div>
-            }
-          >
-            <div className="space-y-3">
-              {/* 原文 */}
-              <div>
-                <div className="text-xs text-gray-400 mb-1">原文</div>
-                <div className="text-sm text-gray-800 leading-relaxed">
-                  {selectedSentence}
+      {/* Main Content Area with Sidebar */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Content */}
+        <div 
+          ref={contentRef}
+          className={`flex-1 overflow-hidden ${themeStyles.bg} relative`}
+          onMouseUp={handleMouseUp}
+        >
+          {loadingState.isLoading ? (
+            renderLoading()
+          ) : (
+            renderContent()
+          )}
+          
+          {/* 句子翻译弹窗 */}
+          {sentencePopupVisible && (
+            <Card
+              ref={sentencePopupRef}
+              className="absolute z-50 shadow-lg max-w-md"
+              style={{
+                top: '20%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                minWidth: '300px',
+              }}
+              title={
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <TranslationOutlined />
+                    句子翻译
+                  </span>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CloseOutlined />}
+                    onClick={closeSentencePopup}
+                  />
+                </div>
+              }
+            >
+              <div className="space-y-3">
+                {/* 原文 */}
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">原文</div>
+                  <div className="text-sm text-gray-800 leading-relaxed">
+                    {selectedSentence}
+                  </div>
+                </div>
+                
+                <Divider className="my-2" />
+                
+                {/* 译文 */}
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">译文</div>
+                  {sentenceTranslating ? (
+                    <Spin size="small" tip="翻译中..." />
+                  ) : (
+                    <div className="text-sm text-blue-700 leading-relaxed">
+                      {translatedSentence}
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              <Divider className="my-2" />
-              
-              {/* 译文 */}
-              <div>
-                <div className="text-xs text-gray-400 mb-1">译文</div>
-                {sentenceTranslating ? (
-                  <Spin size="small" tip="翻译中..." />
-                ) : (
-                  <div className="text-sm text-blue-700 leading-relaxed">
-                    {translatedSentence}
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        )}
+            </Card>
+          )}
+        </div>
+        
+        {/* 单词详情侧边栏 */}
+        <WordPopup
+          word={selectedWord}
+          context={selectedContext}
+          visible={popupVisible}
+          onClose={() => setPopupVisible(false)}
+          onPlayPronunciation={playPronunciation}
+          mode="sidebar"
+        />
       </div>
 
       {/* 章节菜单 Drawer */}
@@ -1214,14 +1227,6 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         </div>
       </Drawer>
 
-      {/* 单词弹窗 */}
-      <WordPopup
-        word={selectedWord}
-        context={selectedContext}
-        visible={popupVisible}
-        onClose={() => setPopupVisible(false)}
-        onPlayPronunciation={playPronunciation}
-      />
     </div>
   );
 };

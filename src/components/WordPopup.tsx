@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Modal, Spin, Button, Tag, message, Select } from 'antd';
-import { PlusOutlined, BookOutlined, SoundOutlined } from '@ant-design/icons';
-import type { WordDefinition, WordBook } from '../types';
+import { PlusOutlined, BookOutlined, SoundOutlined, CloseOutlined } from '@ant-design/icons';
+import type { WordDefinition, WordBook, Word } from '../types';
 
 interface WordPopupProps {
   word: string;
@@ -9,14 +9,23 @@ interface WordPopupProps {
   visible: boolean;
   onClose: () => void;
   onPlayPronunciation?: (word: string) => void;
+  mode?: 'modal' | 'sidebar';
 }
 
-const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, onPlayPronunciation }) => {
+const WordPopup: React.FC<WordPopupProps> = ({ 
+  word, 
+  context, 
+  visible, 
+  onClose, 
+  onPlayPronunciation,
+  mode = 'modal'
+}) => {
   const [loading, setLoading] = useState(false);
   const [definition, setDefinition] = useState<WordDefinition | null>(null);
   const [wordBooks, setWordBooks] = useState<WordBook[]>([]);
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const [addingToBook, setAddingToBook] = useState(false);
+  const [source, setSource] = useState<'wordbook' | 'ai' | null>(null);
 
   // 获取单词定义
   useEffect(() => {
@@ -26,26 +35,126 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
     }
   }, [visible, word]);
 
+  // 将数据库单词转换为 WordDefinition 格式
+  const convertWordToDefinition = (wordData: Word): WordDefinition => {
+    // 解析中文释义（格式可能是 "pos meaning; pos meaning" 或 JSON）
+    let definitions: Array<{pos: string; meaningCn: string; meaningEn: string; examples: string[]}> = [];
+    
+    try {
+      // 尝试解析为 JSON
+      const parsed = JSON.parse(wordData.definitionCn || '[]');
+      if (Array.isArray(parsed)) {
+        definitions = parsed;
+      } else {
+        // 旧格式：用分号分隔
+        definitions = (wordData.definitionCn || '').split('; ').map((def) => ({
+          pos: def.split(' ')[0] || '',
+          meaningCn: def.split(' ').slice(1).join(' ') || def,
+          meaningEn: '',
+          examples: [],
+        }));
+      }
+    } catch {
+      // 解析失败，使用简单分割
+      definitions = (wordData.definitionCn || '').split('; ').map((def) => ({
+        pos: def.split(' ')[0] || '',
+        meaningCn: def.split(' ').slice(1).join(' ') || def,
+        meaningEn: '',
+        examples: [],
+      }));
+    }
+
+    // 解析词根分析
+    let rootAnalysis = wordData.rootAnalysis;
+    if (typeof rootAnalysis === 'string' && rootAnalysis) {
+      try {
+        rootAnalysis = JSON.parse(rootAnalysis);
+      } catch {
+        rootAnalysis = undefined;
+      }
+    }
+
+    // 解析相关词
+    let relatedWords = wordData.relatedWords;
+    if (typeof relatedWords === 'string' && relatedWords) {
+      try {
+        relatedWords = JSON.parse(relatedWords);
+      } catch {
+        relatedWords = undefined;
+      }
+    }
+
+    return {
+      word: wordData.word,
+      phoneticUk: wordData.phoneticUk,
+      phoneticUs: wordData.phoneticUs,
+      definitions: definitions.filter(d => d.meaningCn),
+      level: wordData.level,
+      etymology: wordData.etymology,
+      rootAnalysis,
+      relatedWords,
+      contextAnalysis: undefined, // 单词本中的单词可能没有上下文分析
+      contextTranslation: undefined,
+      synonyms: [],
+      antonyms: [],
+    };
+  };
+
+  const fetchDefinition = async () => {
+    setLoading(true);
+    setSource(null);
+    
+    try {
+      // 1. 先查询单词本
+      const wordFromDB = await window.electron.ipcRenderer.invoke('db:getWord', word.toLowerCase());
+      
+      if (wordFromDB) {
+        console.log('[WordPopup] 从单词本找到单词:', wordFromDB);
+        setDefinition(convertWordToDefinition(wordFromDB));
+        setSource('wordbook');
+        setLoading(false);
+        return;
+      }
+      
+      // 2. 单词本中没有，调用 AI 接口
+      console.log('[WordPopup] 单词本中未找到，调用 AI 接口:', word);
+      const result = await window.electron.ipcRenderer.invoke('ai:defineWord', {
+        word,
+        context,
+      });
+      
+      if (result.success) {
+        setDefinition(result.data);
+        setSource('ai');
+        // 自动保存到默认单词本
+        await autoSaveToDefaultBook(result.data);
+      } else {
+        message.error('获取单词定义失败: ' + (result.message || result.error || '未知错误'));
+      }
+    } catch (error) {
+      message.error('获取单词定义失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 自动保存到默认单词本
   const autoSaveToDefaultBook = async (def: WordDefinition) => {
     try {
-      // 获取单词本列表
       const books = await window.electron.ipcRenderer.invoke('db:getWordBooks');
       if (!books || books.length === 0) {
         console.log('没有可用的单词本，跳过自动保存');
         return;
       }
       
-      // 使用第一个单词本作为默认
       const defaultBookId = books[0].id;
       
-      // 先添加单词到数据库
       const wordResult = await window.electron.ipcRenderer.invoke('db:addWord', {
         word: def.word,
         phoneticUk: def.phoneticUk,
         phoneticUs: def.phoneticUs,
-        definitionCn: def.definitions.map(d => `${d.pos} ${d.meaningCn}`).join('; '),
-        definitionEn: def.definitions.map(d => d.meaningEn).join('; '),
+        definitionCn: JSON.stringify(def.definitions),
+        definitionEn: '',
         level: def.level || 'unknown',
         source: 'user',
         etymology: def.etymology,
@@ -54,7 +163,6 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
       });
 
       if (wordResult && wordResult.success) {
-        // 添加到单词本（包含上下文分析）
         await window.electron.ipcRenderer.invoke('db:addWordToBook', 
           defaultBookId, 
           wordResult.id,
@@ -69,32 +177,10 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
     }
   };
 
-  const fetchDefinition = async () => {
-    setLoading(true);
-    try {
-      const result = await window.electron.ipcRenderer.invoke('ai:defineWord', {
-        word,
-        context,
-      });
-      if (result.success) {
-        setDefinition(result.data);
-        // 自动保存到默认单词本
-        await autoSaveToDefaultBook(result.data);
-      } else {
-        message.error('获取单词定义失败: ' + (result.message || result.error || '未知错误'));
-      }
-    } catch (error) {
-      message.error('获取单词定义失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchWordBooks = async () => {
     try {
       const result = await window.electron.ipcRenderer.invoke('db:getWordBooks');
       setWordBooks(result);
-      // 默认选择第一个单词本
       if (result.length > 0 && !selectedBookId) {
         setSelectedBookId(result[0].id);
       }
@@ -115,13 +201,12 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
 
     setAddingToBook(true);
     try {
-      // 先添加单词到数据库（包含完整信息）
       const wordResult = await window.electron.ipcRenderer.invoke('db:addWord', {
         word: definition.word,
         phoneticUk: definition.phoneticUk,
         phoneticUs: definition.phoneticUs,
-        definitionCn: definition.definitions.map(d => `${d.pos} ${d.meaningCn}`).join('; '),
-        definitionEn: definition.definitions.map(d => d.meaningEn).join('; '),
+        definitionCn: JSON.stringify(definition.definitions),
+        definitionEn: '',
         level: definition.level || 'unknown',
         source: 'user',
         etymology: definition.etymology,
@@ -130,7 +215,6 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
       });
 
       if (wordResult && wordResult.success) {
-        // 添加到单词本（包含上下文分析）
         await window.electron.ipcRenderer.invoke('db:addWordToBook', 
           selectedBookId, 
           wordResult.id,
@@ -148,6 +232,15 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
     }
   };
 
+  const renderSourceBadge = () => {
+    if (!source) return null;
+    
+    if (source === 'wordbook') {
+      return <Tag color="green">来自单词本</Tag>;
+    }
+    return <Tag color="blue">AI 解析</Tag>;
+  };
+
   const renderDefinition = () => {
     if (!definition) return null;
 
@@ -155,11 +248,12 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
       <div className="space-y-4">
         {/* 单词标题 */}
         <div className="border-b pb-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-bold">{definition.word}</h2>
             {definition.level && (
               <Tag color="blue">{definition.level}</Tag>
             )}
+            {renderSourceBadge()}
             {onPlayPronunciation && (
               <Button
                 type="text"
@@ -188,8 +282,10 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
                 <Tag color="default">{def.pos}</Tag>
                 <div>
                   <div className="text-gray-800">{def.meaningCn}</div>
-                  <div className="text-gray-500 text-sm">{def.meaningEn}</div>
-                  {def.examples.length > 0 && (
+                  {def.meaningEn && (
+                    <div className="text-gray-500 text-sm">{def.meaningEn}</div>
+                  )}
+                  {def.examples && def.examples.length > 0 && (
                     <div className="mt-1 text-gray-600 text-sm italic">
                       {def.examples[0]}
                     </div>
@@ -253,8 +349,8 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
               <div className="mt-2 pt-2 border-t border-purple-200">
                 <div className="text-xs text-purple-500 mb-1">相关词汇</div>
                 <div className="flex flex-wrap gap-2">
-                  {definition.relatedWords.map((rw, idx) => (
-                    <div key={idx} className="bg-white px-2 py-1 rounded text-xs">
+                  {definition.relatedWords.map((rw, index) => (
+                    <div key={index} className="bg-white px-2 py-1 rounded text-xs">
                       <span className="font-medium text-gray-800">{rw.word}</span>
                       <span className="text-gray-400 mx-1">·</span>
                       <span className="text-gray-500">{rw.meaning}</span>
@@ -315,36 +411,69 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
           </div>
         )}
 
-        {/* 添加到单词本 */}
-        <div className="border-t pt-4 mt-4">
-          <div className="flex items-center gap-3">
-            <BookOutlined />
-            <span>添加到单词本:</span>
-            <Select
-              style={{ width: 200 }}
-              placeholder="选择单词本"
-              value={selectedBookId}
-              onChange={setSelectedBookId}
-              options={wordBooks.map(book => ({
-                label: book.name,
-                value: book.id,
-              }))}
-            />
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              loading={addingToBook}
-              onClick={handleAddToWordBook}
-              disabled={!selectedBookId}
-            >
-              添加
-            </Button>
+        {/* 添加到单词本 - 仅 AI 来源时显示 */}
+        {source === 'ai' && (
+          <div className="border-t pt-4 mt-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <BookOutlined />
+              <span>添加到单词本:</span>
+              <Select
+                style={{ width: 150 }}
+                placeholder="选择单词本"
+                value={selectedBookId}
+                onChange={setSelectedBookId}
+                options={wordBooks.map(book => ({
+                  label: book.name,
+                  value: book.id,
+                }))}
+              />
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                loading={addingToBook}
+                onClick={handleAddToWordBook}
+                disabled={!selectedBookId}
+              >
+                添加
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   };
 
+  // 侧边栏模式
+  if (mode === 'sidebar') {
+    if (!visible) return null;
+    
+    return (
+      <div className="w-96 h-full border-l bg-white flex flex-col">
+        {/* 头部 */}
+        <div className="h-14 border-b flex items-center justify-between px-4 bg-gray-50">
+          <span className="font-medium text-gray-700">单词详情</span>
+          <Button 
+            type="text" 
+            icon={<CloseOutlined />} 
+            onClick={onClose}
+          />
+        </div>
+        
+        {/* 内容 */}
+        <div className="flex-1 overflow-auto p-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Spin size="large" tip="查询中..." />
+            </div>
+          ) : (
+            renderDefinition()
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 弹框模式
   return (
     <Modal
       title={null}
