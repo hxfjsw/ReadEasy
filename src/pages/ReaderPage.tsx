@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button, message, Tag, Spin, Empty, Drawer, Slider, Select, Tooltip, Progress, Card, Divider } from 'antd';
-import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined, TranslationOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined } from '@ant-design/icons';
+import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined, TranslationOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import WordPopup from '../components/WordPopup';
 import { useSettingsStore } from '../stores/settingsStore';
 import { VocabularyLevel, VocabularyLevelLabels } from '../types';
@@ -61,8 +61,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const [theme, setTheme] = useState<'light' | 'dark' | 'sepia'>('light');
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
   
-  // 阅读进度
-  const [readingProgress, setReadingProgress] = useState<number>(0);
+  // 阅读进度（基于页码）
   const contentRef = useRef<HTMLDivElement>(null);
   
   // 单词弹窗状态
@@ -93,6 +92,116 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   
   // 词汇分析结果缓存
   const [vocabularyAnalysis, setVocabularyAnalysis] = useState<Map<string, string>>(new Map());
+  
+  // 分页相关状态
+  const [currentPage, setCurrentPage] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(0);
+  const [pageContents, setPageContents] = useState<string[]>([]);
+  const PAGE_SIZE = 3000; // 每页字符数
+  
+  // 将内容分割成页面
+  const splitContentIntoPages = (content: string, pageSize: number): string[] => {
+    if (!content || content.length <= pageSize) {
+      return [content];
+    }
+    
+    const pages: string[] = [];
+    let startIndex = 0;
+    
+    while (startIndex < content.length) {
+      // 尝试在句子结尾处分割（查找句号、问号、感叹号后的空格或换行）
+      let endIndex = startIndex + pageSize;
+      
+      if (endIndex >= content.length) {
+        // 剩余内容不足一页，直接添加
+        pages.push(content.slice(startIndex));
+        break;
+      }
+      
+      // 查找合适的分割点（优先在段落或句子边界）
+      let splitIndex = endIndex;
+      
+      // 先尝试找段落边界（两个换行符）
+      const paragraphMatch = content.slice(startIndex, endIndex + 200).match(/\n\s*\n/);
+      if (paragraphMatch && paragraphMatch.index) {
+        const paragraphEnd = startIndex + paragraphMatch.index + paragraphMatch[0].length;
+        if (paragraphEnd > startIndex + pageSize * 0.7 && paragraphEnd <= endIndex + 200) {
+          splitIndex = paragraphEnd;
+        }
+      }
+      
+      // 如果没有找到段落边界，尝试在句子边界分割
+      if (splitIndex === endIndex) {
+        const sentenceMatch = content.slice(startIndex, endIndex + 100).match(/[.!?。！？]\s+/);
+        if (sentenceMatch && sentenceMatch.index) {
+          const sentenceEnd = startIndex + sentenceMatch.index + sentenceMatch[0].length;
+          if (sentenceEnd > startIndex + pageSize * 0.7 && sentenceEnd <= endIndex + 100) {
+            splitIndex = sentenceEnd;
+          }
+        }
+      }
+      
+      pages.push(content.slice(startIndex, splitIndex));
+      startIndex = splitIndex;
+    }
+    
+    return pages;
+  };
+  
+  // 翻页函数
+  const goToPreviousPage = () => {
+    if (currentPage > 0) {
+      const newPage = currentPage - 1;
+      setCurrentPage(newPage);
+      setFileContent(pageContents[newPage]);
+      // 分析新页面的词汇
+      analyzeVocabulary(pageContents[newPage]).catch(console.error);
+      // 保存进度
+      saveReadingProgressForPage(newPage);
+    }
+  };
+  
+  const goToNextPage = () => {
+    if (currentPage < totalPages - 1) {
+      const newPage = currentPage + 1;
+      setCurrentPage(newPage);
+      setFileContent(pageContents[newPage]);
+      // 分析新页面的词汇
+      analyzeVocabulary(pageContents[newPage]).catch(console.error);
+      // 保存进度
+      saveReadingProgressForPage(newPage);
+    }
+  };
+  
+  const goToPage = (pageNum: number) => {
+    if (pageNum >= 0 && pageNum < totalPages) {
+      setCurrentPage(pageNum);
+      setFileContent(pageContents[pageNum]);
+      analyzeVocabulary(pageContents[pageNum]).catch(console.error);
+      // 保存进度
+      saveReadingProgressForPage(pageNum);
+    }
+  };
+  
+  // 翻页时保存进度（不更新state，避免循环）
+  const saveReadingProgressForPage = async (pageNum: number) => {
+    if (!filePath || !fileName) return;
+    
+    try {
+      const progress = totalPages > 0 ? Math.round((pageNum / totalPages) * 100) : 0;
+      
+      await window.electron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
+        bookName: fileName,
+        filePath: filePath,
+        format: filePath.split('.').pop() || '',
+        progress: progress,
+        currentPosition: pageNum.toString(),
+        lastReadAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('保存阅读进度失败:', error);
+    }
+  };
 
   // 加载保存的设置和已掌握单词
   useEffect(() => {
@@ -221,12 +330,12 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         }];
       }
       
-      // 第三阶段：渲染内容（先显示第一屏）
+      // 第三阶段：处理分页内容
       setLoadingState({
         isLoading: true,
         stage: 'rendering',
         progress: 60,
-        message: '正在渲染内容...',
+        message: '正在处理分页...',
       });
       
       // 设置基础信息
@@ -234,12 +343,13 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       setChapters(parsedChapters);
       setCurrentChapter(0);
       
-      // 分块加载内容，先显示前10000字符，剩下的后台加载
+      // 分页处理
       const fullContent = result.data || '';
-      const initialChunk = fullContent.slice(0, 30000);
-      const remainingChunk = fullContent.slice(30000);
-      
-      setFileContent(initialChunk);
+      const pages = splitContentIntoPages(fullContent, PAGE_SIZE);
+      setPageContents(pages);
+      setTotalPages(pages.length);
+      setCurrentPage(0);
+      setFileContent(pages[0] || '');
       
       // 显示完成，结束loading状态
       setLoadingState({
@@ -249,7 +359,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         message: '加载完成',
       });
       
-      message.success('文件加载成功');
+      message.success(`文件加载成功，共 ${pages.length} 页`);
       
       // 添加到书架（阅读记录）
       try {
@@ -267,18 +377,9 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         console.error('[ReaderPage] 添加到书架失败:', err);
       }
       
-      // 第四阶段：后台加载剩余内容和分析
-      if (remainingChunk.length > 0) {
-        // 延迟加载剩余内容
-        requestAnimationFrame(() => {
-          setFileContent(fullContent);
-          console.log('[ReaderPage] 剩余内容已加载');
-        });
-      }
-      
-      // 后台分析词汇
+      // 后台分析词汇（只分析当前页）
       setTimeout(() => {
-        analyzeVocabulary(fullContent).catch(err => {
+        analyzeVocabulary(pages[0] || '').catch(err => {
           console.error('[ReaderPage] 后台词汇分析失败:', err);
         });
       }, 500);
@@ -349,47 +450,20 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
     try {
       const record = await window.electron.ipcRenderer.invoke('db:getReadingRecord', path);
       if (record) {
-        setReadingProgress(record.progress || 0);
-        // 如果有保存的位置，滚动到该位置
-        if (record.currentPosition && contentRef.current) {
-          const position = parseInt(record.currentPosition);
-          setTimeout(() => {
-            contentRef.current?.scrollTo(0, position);
-          }, 100);
+        // 加载保存的页码
+        if (record.currentPosition) {
+          const savedPage = parseInt(record.currentPosition);
+          if (!isNaN(savedPage) && savedPage >= 0) {
+            setTimeout(() => {
+              goToPage(savedPage);
+            }, 100);
+          }
         }
       }
     } catch (error) {
       console.error('加载阅读进度失败:', error);
     }
   };
-
-  const saveReadingProgress = async () => {
-    if (!filePath || !fileName) return;
-    
-    try {
-      const scrollPosition = contentRef.current?.scrollTop || 0;
-      const scrollHeight = contentRef.current?.scrollHeight || 1;
-      const progress = Math.round((scrollPosition / scrollHeight) * 100);
-      
-      await window.electron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
-        bookName: fileName,
-        filePath: filePath,
-        format: filePath.split('.').pop() || '',
-        progress: progress,
-        currentPosition: scrollPosition.toString(),
-        lastReadAt: new Date().toISOString(),
-      });
-      
-      setReadingProgress(progress);
-    } catch (error) {
-      console.error('保存阅读进度失败:', error);
-    }
-  };
-
-  // 处理滚动，保存阅读进度
-  const handleScroll = useCallback(() => {
-    saveReadingProgress();
-  }, [filePath, fileName]);
 
   // 处理单词点击
   const handleWordClick = useCallback((word: string, context: string) => {
@@ -735,37 +809,65 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   // 渲染带高亮的朗读内容
   const renderHighlightedContent = () => {
     return (
-      <div 
-        className={`reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} min-h-full shadow-sm`}
-        style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
-      >
-        <div className={`mb-6 pb-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-          <h2 className={`text-2xl font-bold ${themeStyles.text}`}>{fileName}</h2>
-          <div className="flex items-center gap-4 mt-2">
-            <Tag color="blue">朗读中</Tag>
-            <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-              第 {currentSentenceIndex + 1} / {sentences.length} 句
-            </span>
+      <div className="flex flex-col h-full">
+        {/* 页面内容 */}
+        <div 
+          className={`flex-1 reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} shadow-sm overflow-hidden`}
+          style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
+        >
+          <div className={`mb-6 pb-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+            <h2 className={`text-2xl font-bold ${themeStyles.text}`}>{fileName}</h2>
+            <div className="flex items-center gap-4 mt-2">
+              <Tag color="blue">朗读中</Tag>
+              <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                第 {currentSentenceIndex + 1} / {sentences.length} 句
+              </span>
+            </div>
+          </div>
+          <div className={`${themeStyles.text} whitespace-pre-wrap`}>
+            {sentences.map((sentence, index) => (
+              <span
+                key={index}
+                ref={index === currentSentenceIndex ? highlightRef : null}
+                className={`transition-all duration-300 rounded px-1 ${
+                  index === currentSentenceIndex
+                    ? 'bg-yellow-200 text-yellow-900 font-medium'
+                    : index < currentSentenceIndex
+                    ? 'text-gray-400'
+                    : ''
+                }`}
+              >
+                {renderClickableContent(sentence)}
+                {' '}
+              </span>
+            ))}
           </div>
         </div>
-        <div className={`${themeStyles.text} whitespace-pre-wrap`}>
-          {sentences.map((sentence, index) => (
-            <span
-              key={index}
-              ref={index === currentSentenceIndex ? highlightRef : null}
-              className={`transition-all duration-300 rounded px-1 ${
-                index === currentSentenceIndex
-                  ? 'bg-yellow-200 text-yellow-900 font-medium'
-                  : index < currentSentenceIndex
-                  ? 'text-gray-400'
-                  : ''
-              }`}
+        
+        {/* 分页控制栏 */}
+        {totalPages > 1 && (
+          <div className={`h-14 border-t flex items-center justify-center gap-4 ${
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          }`}>
+            <Button
+              icon={<LeftOutlined />}
+              onClick={goToPreviousPage}
+              disabled={currentPage === 0}
             >
-              {renderClickableContent(sentence)}
-              {' '}
+              上一页
+            </Button>
+            <span className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+              第 {currentPage + 1} / {totalPages} 页
             </span>
-          ))}
-        </div>
+            <Button
+              icon={<RightOutlined />}
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages - 1}
+            >
+              下一页
+            </Button>
+          </div>
+        )}
       </div>
     );
   };
@@ -822,23 +924,51 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
     }
 
     return (
-      <div 
-        className={`reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} min-h-full shadow-sm`}
-        style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
-      >
-        <div className={`mb-6 pb-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-          <h2 className={`text-2xl font-bold ${themeStyles.text}`}>{fileName}</h2>
-          <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-            提示：点击英文单词可查看释义并添加到单词本，带下划线的为生词
-          </p>
-          <div className="flex gap-2 mt-2">
-            <Tag color="blue">词汇水平: {VocabularyLevelLabels[vocabularyLevel]}</Tag>
-            <Tag color="red">生词: 红色下划线</Tag>
+      <div className="flex flex-col h-full">
+        {/* 页面内容 */}
+        <div 
+          className={`flex-1 reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} shadow-sm overflow-hidden`}
+          style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
+        >
+          <div className={`mb-6 pb-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+            <h2 className={`text-2xl font-bold ${themeStyles.text}`}>{fileName}</h2>
+            <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+              提示：点击英文单词可查看释义并添加到单词本，带下划线的为生词
+            </p>
+            <div className="flex gap-2 mt-2">
+              <Tag color="blue">词汇水平: {VocabularyLevelLabels[vocabularyLevel]}</Tag>
+              <Tag color="red">生词: 红色下划线</Tag>
+            </div>
+          </div>
+          <div className={`${themeStyles.text} whitespace-pre-wrap`}>
+            {renderClickableContent(fileContent)}
           </div>
         </div>
-        <div className={`${themeStyles.text} whitespace-pre-wrap`}>
-          {renderClickableContent(fileContent)}
-        </div>
+        
+        {/* 分页控制栏 */}
+        {totalPages > 1 && (
+          <div className={`h-14 border-t flex items-center justify-center gap-4 ${
+            theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+          }`}>
+            <Button
+              icon={<LeftOutlined />}
+              onClick={goToPreviousPage}
+              disabled={currentPage === 0}
+            >
+              上一页
+            </Button>
+            <span className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+              第 {currentPage + 1} / {totalPages} 页
+            </span>
+            <Button
+              icon={<RightOutlined />}
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages - 1}
+            >
+              下一页
+            </Button>
+          </div>
+        )}
       </div>
     );
   };
@@ -875,9 +1005,11 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-            进度: {readingProgress}%
-          </span>
+          {totalPages > 0 && (
+            <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+              {currentPage + 1} / {totalPages} 页
+            </span>
+          )}
           
           {/* 全文朗读按钮 */}
           {fileContent && (
@@ -938,8 +1070,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       {/* Content Area */}
       <div 
         ref={contentRef}
-        className={`flex-1 overflow-auto ${themeStyles.bg} relative`}
-        onScroll={handleScroll}
+        className={`flex-1 overflow-hidden ${themeStyles.bg} relative`}
         onMouseUp={handleMouseUp}
       >
         {loadingState.isLoading ? (
