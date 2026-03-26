@@ -125,7 +125,6 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
             progress: 0,
             currentPosition: '0',
             bookmarks: '[]',
-            lastReadAt: new Date().toISOString(),
           });
           
           if (addResult) {

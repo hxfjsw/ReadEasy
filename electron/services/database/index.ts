@@ -396,8 +396,8 @@ export class DatabaseService {
       `).run(data.progress, data.currentPosition || null, data.bookmarks, existing.id);
     } else {
       this.db.prepare(`
-        INSERT INTO reading_records (book_name, file_path, format, progress, current_position, bookmarks)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO reading_records (book_name, file_path, format, progress, current_position, bookmarks, last_read_at)
+        VALUES (?, ?, ?, ?, ?, ?, unixepoch())
       `).run(data.bookName, data.filePath, data.format, data.progress, data.currentPosition || null, data.bookmarks);
     }
   }
