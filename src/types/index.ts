@@ -25,6 +25,21 @@ export const VocabularyLevelLabels: Record<VocabularyLevel, string> = {
   [VocabularyLevel.TEM8]: '专八',
 };
 
+// 词根词缀分析
+export interface RootAnalysis {
+  prefix?: { value: string; meaning: string };
+  root: { value: string; meaning: string; origin?: string };
+  suffix?: { value: string; meaning: string };
+  explanation: string;
+}
+
+// 相关词
+export interface RelatedWord {
+  word: string;
+  meaning: string;
+  relation: string;
+}
+
 // 单词定义
 export interface WordDefinition {
   word: string;
@@ -39,6 +54,10 @@ export interface WordDefinition {
   level?: string;
   synonyms?: string[];
   antonyms?: string[];
+  // 词源和词根词缀
+  etymology?: string;
+  rootAnalysis?: RootAnalysis;
+  relatedWords?: RelatedWord[];
   // 上下文分析
   contextAnalysis?: string;
   contextTranslation?: string;

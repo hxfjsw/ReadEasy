@@ -150,6 +150,72 @@ const WordPopup: React.FC<WordPopupProps> = ({ word, context, visible, onClose, 
           </div>
         </div>
 
+        {/* 词源和词根词缀分析 */}
+        {(definition.etymology || definition.rootAnalysis) && (
+          <div className="bg-purple-50 p-3 rounded border-l-4 border-purple-400">
+            <div className="text-purple-600 text-sm mb-2 font-medium">词源与词根词缀</div>
+            
+            {/* 词源 */}
+            {definition.etymology && (
+              <div className="mb-2 text-gray-700 text-sm">
+                <span className="font-medium">词源: </span>{definition.etymology}
+              </div>
+            )}
+            
+            {/* 词根词缀拆解 */}
+            {definition.rootAnalysis && (
+              <div className="mb-2">
+                <div className="flex items-center gap-2 mb-1">
+                  {definition.rootAnalysis.prefix && (
+                    <div className="flex items-center">
+                      <span className="text-blue-600 font-bold">{definition.rootAnalysis.prefix.value}</span>
+                      <span className="text-gray-400 mx-1">+</span>
+                    </div>
+                  )}
+                  <div className="flex items-center">
+                    <span className="text-red-600 font-bold">{definition.rootAnalysis.root.value}</span>
+                    {definition.rootAnalysis.root.origin && (
+                      <span className="text-xs text-gray-400 ml-1">({definition.rootAnalysis.root.origin})</span>
+                    )}
+                  </div>
+                  {definition.rootAnalysis.suffix && (
+                    <div className="flex items-center">
+                      <span className="text-gray-400 mx-1">+</span>
+                      <span className="text-green-600 font-bold">{definition.rootAnalysis.suffix.value}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {definition.rootAnalysis.prefix && (
+                    <div>前缀 <strong>{definition.rootAnalysis.prefix.value}</strong>: {definition.rootAnalysis.prefix.meaning}</div>
+                  )}
+                  <div>词根 <strong>{definition.rootAnalysis.root.value}</strong>: {definition.rootAnalysis.root.meaning}</div>
+                  {definition.rootAnalysis.suffix && (
+                    <div>后缀 <strong>{definition.rootAnalysis.suffix.value}</strong>: {definition.rootAnalysis.suffix.meaning}</div>
+                  )}
+                  <div className="mt-1 text-gray-700 italic">{definition.rootAnalysis.explanation}</div>
+                </div>
+              </div>
+            )}
+            
+            {/* 相关词 */}
+            {definition.relatedWords && definition.relatedWords.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-purple-200">
+                <div className="text-xs text-purple-500 mb-1">相关词汇</div>
+                <div className="flex flex-wrap gap-2">
+                  {definition.relatedWords.map((rw, idx) => (
+                    <div key={idx} className="bg-white px-2 py-1 rounded text-xs">
+                      <span className="font-medium text-gray-800">{rw.word}</span>
+                      <span className="text-gray-400 mx-1">·</span>
+                      <span className="text-gray-500">{rw.meaning}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 同义词/反义词 */}
         {(definition.synonyms?.length || definition.antonyms?.length) && (
           <div className="flex gap-4">

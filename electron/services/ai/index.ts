@@ -2,6 +2,21 @@ import OpenAI from 'openai';
 import { DatabaseService } from '../database';
 import { AIConfig } from '../database/schema';
 
+// 词根词缀分析
+export interface RootAnalysis {
+  prefix?: { value: string; meaning: string };
+  root: { value: string; meaning: string; origin?: string };
+  suffix?: { value: string; meaning: string };
+  explanation: string;
+}
+
+// 相关词
+export interface RelatedWord {
+  word: string;
+  meaning: string;
+  relation: string;
+}
+
 export interface WordDefinition {
   word: string;
   phoneticUk?: string;
@@ -15,6 +30,10 @@ export interface WordDefinition {
   level?: string;
   synonyms?: string[];
   antonyms?: string[];
+  // 词源和词根词缀
+  etymology?: string;
+  rootAnalysis?: RootAnalysis;
+  relatedWords?: RelatedWord[];
   // 上下文分析
   contextAnalysis?: string;
   contextTranslation?: string;
@@ -276,6 +295,11 @@ You MUST provide:
 
     return `Please provide a detailed definition for the word "${word}".${contextSection}
 
+You MUST also provide etymology analysis including:
+1. etymology: The origin and history of the word
+2. rootAnalysis: Break down the word into its root(s), prefix, and suffix with explanations
+3. relatedWords: List 3-5 words that share the same root or are etymologically related
+
 Return the result in the following JSON format:
 {
   "word": "${word}",
@@ -291,7 +315,17 @@ Return the result in the following JSON format:
   ],
   "level": "vocabulary level (elementary, middle, high, cet4, cet6, postgraduate, ielts, toefl, gre, tem8)",
   "synonyms": ["synonym1", "synonym2"],
-  "antonyms": ["antonym1", "antonym2"]${contextFields}
+  "antonyms": ["antonym1", "antonym2"],
+  "etymology": "Origin and history of the word (e.g., from Latin/Greek/French...)",
+  "rootAnalysis": {
+    "prefix": {"value": "prefix part", "meaning": "meaning of prefix"},
+    "root": {"value": "root part", "meaning": "meaning of root", "origin": "Latin/Greek/etc"},
+    "suffix": {"value": "suffix part", "meaning": "meaning of suffix"},
+    "explanation": "How the parts combine to form the word meaning"
+  },
+  "relatedWords": [
+    {"word": "related word 1", "meaning": "brief meaning", "relation": "shares same root/prefix/etc"}
+  ]${contextFields}
 }`;
   }
 
@@ -355,6 +389,10 @@ Return the result in the following JSON format:
       level: result.level,
       synonyms: Array.isArray(result.synonyms) ? result.synonyms : [],
       antonyms: Array.isArray(result.antonyms) ? result.antonyms : [],
+      etymology: result.etymology,
+      rootAnalysis: result.root_analysis || result.rootAnalysis,
+      relatedWords: Array.isArray(result.related_words || result.relatedWords) 
+        ? (result.related_words || result.relatedWords) : [],
       contextAnalysis: result.context_analysis || result.contextAnalysis,
       contextTranslation: result.context_translation || result.contextTranslation,
     };
