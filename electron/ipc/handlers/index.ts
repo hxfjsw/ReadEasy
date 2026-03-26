@@ -1,12 +1,16 @@
 import { ipcMain, dialog } from 'electron';
 import * as fs from 'fs';
+import * as path from 'path';
 import { DatabaseService } from '../../services/database';
 import { AIService } from '../../services/ai';
+import { ParserService } from '../../services/parser';
 
 export function registerIPCHandlers(
   dbService: DatabaseService,
   aiService: AIService
 ): void {
+  const parserService = new ParserService();
+  
   // 文件操作
   ipcMain.handle('file:open', async () => {
     const result = await dialog.showOpenDialog({
@@ -24,8 +28,35 @@ export function registerIPCHandlers(
 
   ipcMain.handle('file:read', async (_, filePath: string) => {
     try {
-      const data = fs.readFileSync(filePath, 'utf-8');
-      return { success: true, data };
+      const ext = path.extname(filePath).toLowerCase();
+      
+      if (ext === '.epub') {
+        const book = await parserService.parseEpub(filePath);
+        return { 
+          success: true, 
+          data: book.content,
+          metadata: {
+            title: book.title,
+            author: book.author,
+            chapters: book.chapters.map(c => ({ id: c.id, title: c.title })),
+          }
+        };
+      } else if (ext === '.txt') {
+        const book = await parserService.parseTxt(filePath);
+        return { 
+          success: true, 
+          data: book.content,
+          metadata: {
+            title: book.title,
+            author: book.author,
+            chapters: book.chapters.map(c => ({ id: c.id, title: c.title })),
+          }
+        };
+      } else {
+        // 其他格式直接读取文本
+        const data = fs.readFileSync(filePath, 'utf-8');
+        return { success: true, data };
+      }
     } catch (error: any) {
       return { success: false, error: error.message };
     }
