@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, List, Tag, Button, Empty, message, Popconfirm } from 'antd';
-import { BookOutlined, DeleteOutlined, ExportOutlined } from '@ant-design/icons';
+import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input } from 'antd';
+import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined } from '@ant-design/icons';
 import { WordBook, WordBookItem } from '../types';
 
 const WordBookPage: React.FC = () => {
@@ -8,6 +8,11 @@ const WordBookPage: React.FC = () => {
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const [words, setWords] = useState<WordBookItem[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // 创建单词本弹窗
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createForm] = Form.useForm();
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     loadWordBooks();
@@ -21,7 +26,7 @@ const WordBookPage: React.FC = () => {
 
   const loadWordBooks = async () => {
     try {
-      const books = await (window.electron.ipcRenderer.invoke as any)('db:getWordBooks');
+      const books = await window.electron.ipcRenderer.invoke('db:getWordBooks');
       setWordBooks(books);
       if (books.length > 0 && !selectedBookId) {
         setSelectedBookId(books[0].id);
@@ -34,7 +39,7 @@ const WordBookPage: React.FC = () => {
   const loadWordsInBook = async (bookId: number) => {
     setLoading(true);
     try {
-      const bookWords = await (window.electron.ipcRenderer.invoke as any)('db:getWordsInBook', bookId);
+      const bookWords = await window.electron.ipcRenderer.invoke('db:getWordsInBook', bookId);
       setWords(bookWords);
     } catch (error) {
       message.error('加载单词失败');
@@ -46,12 +51,102 @@ const WordBookPage: React.FC = () => {
   const handleDeleteWord = async (wordId: number) => {
     if (!selectedBookId) return;
     try {
-      await (window.electron.ipcRenderer.invoke as any)('db:removeWordFromBook', selectedBookId, wordId);
+      await window.electron.ipcRenderer.invoke('db:removeWordFromBook', selectedBookId, wordId);
       message.success('删除成功');
       loadWordsInBook(selectedBookId);
     } catch (error) {
       message.error('删除失败');
     }
+  };
+
+  const handleCreateWordBook = async () => {
+    try {
+      const values = await createForm.validateFields();
+      setCreating(true);
+      
+      await window.electron.ipcRenderer.invoke('db:addWordBook', {
+        name: values.name,
+        description: values.description || '',
+        source: 'manual',
+        createdAt: new Date().toISOString(),
+      });
+      
+      message.success('单词本创建成功');
+      setCreateModalVisible(false);
+      createForm.resetFields();
+      loadWordBooks();
+    } catch (error) {
+      message.error('创建失败');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleExport = (format: 'txt' | 'csv' | 'json') => {
+    if (words.length === 0) {
+      message.warning('单词本为空，无法导出');
+      return;
+    }
+
+    const bookName = wordBooks.find((b) => b.id === selectedBookId)?.name || '单词本';
+    let content = '';
+    let filename = '';
+    let mimeType = '';
+
+    switch (format) {
+      case 'txt':
+        content = words.map(w => {
+          let line = `${w.word}`;
+          if (w.phoneticUs) line += ` [${w.phoneticUs}]`;
+          if (w.definitionCn) line += ` - ${w.definitionCn}`;
+          if (w.context) line += `\n  原文: ${w.context}`;
+          return line;
+        }).join('\n\n');
+        filename = `${bookName}.txt`;
+        mimeType = 'text/plain';
+        break;
+      
+      case 'csv':
+        content = 'Word,Phonetic,Definition,Level,Context\n';
+        content += words.map(w => {
+          const row = [
+            w.word,
+            w.phoneticUs || '',
+            (w.definitionCn || '').replace(/,/g, ';'),
+            w.level,
+            (w.context || '').replace(/,/g, ';'),
+          ];
+          return row.map(field => `"${field}"`).join(',');
+        }).join('\n');
+        filename = `${bookName}.csv`;
+        mimeType = 'text/csv';
+        break;
+      
+      case 'json':
+        content = JSON.stringify(words.map(w => ({
+          word: w.word,
+          phonetic: w.phoneticUs,
+          definition: w.definitionCn,
+          level: w.level,
+          context: w.context,
+        })), null, 2);
+        filename = `${bookName}.json`;
+        mimeType = 'application/json';
+        break;
+    }
+
+    // 创建下载链接
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    message.success(`已导出为 ${format.toUpperCase()} 格式`);
   };
 
   const getLevelColor = (level: string) => {
@@ -90,8 +185,16 @@ const WordBookPage: React.FC = () => {
     <div className="h-full flex">
       {/* Sidebar - Word Book List */}
       <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="font-medium text-gray-700">单词本列表</h3>
+          <Button
+            type="primary"
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateModalVisible(true)}
+          >
+            新建
+          </Button>
         </div>
         <div className="flex-1 overflow-auto">
           {wordBooks.map((book) => (
@@ -125,7 +228,26 @@ const WordBookPage: React.FC = () => {
                 {wordBooks.find((b) => b.id === selectedBookId)?.name}
                 <Tag className="ml-2">{words.length} 个单词</Tag>
               </h2>
-              <Button icon={<ExportOutlined />}>导出</Button>
+              <div className="flex gap-2">
+                <Button 
+                  icon={<FileTextOutlined />}
+                  onClick={() => handleExport('txt')}
+                >
+                  导出 TXT
+                </Button>
+                <Button 
+                  icon={<ExportOutlined />}
+                  onClick={() => handleExport('csv')}
+                >
+                  导出 CSV
+                </Button>
+                <Button 
+                  icon={<ExportOutlined />}
+                  onClick={() => handleExport('json')}
+                >
+                  导出 JSON
+                </Button>
+              </div>
             </div>
 
             <List
@@ -174,6 +296,34 @@ const WordBookPage: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* 创建单词本弹窗 */}
+      <Modal
+        title="创建新单词本"
+        open={createModalVisible}
+        onOk={handleCreateWordBook}
+        onCancel={() => {
+          setCreateModalVisible(false);
+          createForm.resetFields();
+        }}
+        confirmLoading={creating}
+      >
+        <Form form={createForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label="单词本名称"
+            rules={[{ required: true, message: '请输入单词本名称' }]}
+          >
+            <Input placeholder="例如：雅思词汇" />
+          </Form.Item>
+          <Form.Item
+            name="description"
+            label="描述（可选）"
+          >
+            <Input.TextArea rows={3} placeholder="添加一些描述..." />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

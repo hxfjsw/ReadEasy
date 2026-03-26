@@ -4,26 +4,47 @@ import { contextBridge, ipcRenderer } from 'electron';
 export interface IPCChannels {
   // 文件操作
   'file:open': () => Promise<{ canceled: boolean; filePaths: string[] }>;
-  'file:read': (filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>;
+  'file:read': (filePath: string) => Promise<{ success: boolean; data?: string; error?: string; metadata?: any }>;
   
-  // 数据库操作
-  'db:query': (sql: string, params?: any[]) => Promise<any>;
-  'db:insert': (table: string, data: any) => Promise<number>;
-  'db:update': (table: string, id: number, data: any) => Promise<boolean>;
-  'db:delete': (table: string, id: number) => Promise<boolean>;
+  // 数据库操作 - 用户
+  'db:getUser': () => Promise<any>;
+  'db:updateUser': (id: number, data: any) => Promise<boolean>;
+  
+  // 数据库操作 - 单词
+  'db:getWord': (word: string) => Promise<any>;
+  'db:addWord': (data: any) => Promise<any>;
+  
+  // 数据库操作 - 单词本
+  'db:getWordBooks': () => Promise<any[]>;
+  'db:addWordBook': (data: any) => Promise<any>;
+  'db:deleteWordBook': (id: number) => Promise<boolean>;
+  'db:addWordToBook': (wordBookId: number, wordId: number, context?: string) => Promise<boolean>;
+  'db:removeWordFromBook': (wordBookId: number, wordId: number) => Promise<boolean>;
+  'db:getWordsInBook': (wordBookId: number) => Promise<any[]>;
+  
+  // 数据库操作 - AI配置
+  'db:getAIConfigs': () => Promise<any[]>;
+  'db:getDefaultAIConfig': () => Promise<any>;
+  'db:addAIConfig': (data: any) => Promise<any>;
+  'db:updateAIConfig': (id: number, data: any) => Promise<boolean>;
+  'db:deleteAIConfig': (id: number) => Promise<boolean>;
+  
+  // 数据库操作 - 阅读记录
+  'db:getReadingRecords': () => Promise<any[]>;
+  'db:getReadingRecord': (filePath: string) => Promise<any>;
+  'db:addOrUpdateReadingRecord': (data: any) => Promise<boolean>;
+  'db:deleteReadingRecord': (id: number) => Promise<boolean>;
+  
+  // 数据库操作 - 设置
+  'db:getSetting': (key: string) => Promise<any>;
+  'db:setSetting': (key: string, value: string) => Promise<boolean>;
   
   // AI服务
-  'ai:define-word': (params: { word: string; context?: string }) => Promise<any>;
-  'ai:translate': (params: { text: string }) => Promise<string>;
-  'ai:analyze-vocabulary': (params: { text: string }) => Promise<any>;
-  'ai:generate-example': (params: { word: string; level: string }) => Promise<string>;
-  'ai:get-config': () => Promise<any>;
-  'ai:set-config': (config: any) => Promise<boolean>;
-  'ai:test-connection': (config: any) => Promise<{ success: boolean; message: string }>;
-  
-  // 设置
-  'settings:get': (key: string) => Promise<any>;
-  'settings:set': (key: string, value: any) => Promise<boolean>;
+  'ai:testConnection': (config: any) => Promise<{ success: boolean; message: string }>;
+  'ai:defineWord': (params: { word: string; context?: string; configId?: number }) => Promise<any>;
+  'ai:translate': (params: { text: string; configId?: number }) => Promise<any>;
+  'ai:analyzeVocabulary': (params: { text: string; configId?: number }) => Promise<any>;
+  'ai:generateExample': (params: { word: string; level: string; configId?: number }) => Promise<any>;
   
   // 窗口控制
   'window:minimize': () => void;

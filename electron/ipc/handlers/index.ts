@@ -13,22 +13,46 @@ export function registerIPCHandlers(
   
   console.log('[IPC] Registering IPC handlers...');
   
-  // 获取主窗口的辅助函数
-  const getMainWindow = (): BrowserWindow | undefined => {
-    const win = BrowserWindow.getFocusedWindow();
-    if (win) return win;
-    
-    const allWindows = BrowserWindow.getAllWindows();
-    return allWindows.length > 0 ? allWindows[0] : undefined;
-  };
-  
   // 文件操作
   ipcMain.handle('file:open', async () => {
-    console.log('[IPC] file:open called');
+    console.log('[IPC] ===========================================');
+    console.log('[IPC] file:open called - START');
+    console.log('[IPC] ===========================================');
     try {
-      const parentWindow = getMainWindow();
-      console.log('[IPC] file:open parent window:', parentWindow ? 'found' : 'not found');
+      // 获取主窗口
+      const allWindows = BrowserWindow.getAllWindows();
+      console.log('[IPC] file:open allWindows count:', allWindows.length);
       
+      let parentWindow: BrowserWindow | null = null;
+      
+      if (allWindows.length > 0) {
+        parentWindow = allWindows[0];
+        console.log('[IPC] file:open using first window, id:', parentWindow.id);
+        
+        // 确保窗口是可见和聚焦的
+        if (!parentWindow.isVisible()) {
+          console.log('[IPC] file:open window not visible, showing...');
+          parentWindow.show();
+        }
+        if (!parentWindow.isFocused()) {
+          console.log('[IPC] file:open window not focused, focusing...');
+          parentWindow.focus();
+        }
+      }
+      
+      console.log('[IPC] file:open calling dialog.showOpenDialog...');
+      console.log('[IPC] file:open dialog options:', JSON.stringify({
+        properties: ['openFile'],
+        filters: [
+          { name: 'Ebooks', extensions: ['epub', 'mobi', 'txt'] },
+          { name: 'EPUB', extensions: ['epub'] },
+          { name: 'MOBI', extensions: ['mobi'] },
+          { name: 'Text', extensions: ['txt'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      }));
+      
+      // 使用同步方式打开对话框，避免异步问题
       const result = await dialog.showOpenDialog(parentWindow as any, {
         properties: ['openFile'],
         filters: [
@@ -39,11 +63,15 @@ export function registerIPCHandlers(
           { name: 'All Files', extensions: ['*'] },
         ],
       });
-      console.log('[IPC] file:open result:', result);
+      
+      console.log('[IPC] file:open dialog result:', JSON.stringify(result));
+      console.log('[IPC] file:open - END');
       return result;
     } catch (error) {
-      console.error('[IPC] file:open error:', error);
-      throw error;
+      console.error('[IPC] file:open ERROR:', error);
+      console.error('[IPC] file:open stack:', (error as Error).stack);
+      // 返回一个默认结果而不是抛出错误
+      return { canceled: true, filePaths: [] };
     }
   });
 
