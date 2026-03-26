@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import path from 'path';
 import { DatabaseService } from './services/database';
 import { AIService } from './services/ai';

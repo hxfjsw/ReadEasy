@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Reader content styles */
+.reader-content {
+  line-height: 1.8;
+  font-size: 16px;
+}
+
+.reader-content p {
+  margin-bottom: 1em;
+}
+
+.reader-content .unknown-word {
+  background-color: #ffeb3b;
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.reader-content .unknown-word:hover {
+  background-color: #ffc107;
+}
+
+/* Dark mode */
+.dark-mode {
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+}
+
+.dark-mode .reader-content .unknown-word {
+  background-color: #b8860b;
+}
+
+/* Sepia mode */
+.sepia-mode {
+  background-color: #f4ecd8;
+  color: #5b4636;
+}
