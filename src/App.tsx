@@ -4,19 +4,22 @@ import {
   BookOutlined,
   ReadOutlined,
   SettingOutlined,
+  BookFilled,
 } from '@ant-design/icons';
 import ReaderPage from './pages/ReaderPage';
 import WordBookPage from './pages/WordBookPage';
 import SettingsPage from './pages/SettingsPage';
+import BookshelfPage from './pages/BookshelfPage';
 import { useSettingsStore } from './stores/settingsStore';
 
 const { Sider, Content } = Layout;
 
-type PageType = 'reader' | 'wordbook' | 'settings';
+type PageType = 'reader' | 'bookshelf' | 'wordbook' | 'settings';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<PageType>('reader');
+  const [currentPage, setCurrentPage] = useState<PageType>('bookshelf');
   const [loading, setLoading] = useState(true);
+  const [pendingBookPath, setPendingBookPath] = useState<string | null>(null);
   const initializeSettings = useSettingsStore((state) => state.initialize);
 
   useEffect(() => {
@@ -33,7 +36,26 @@ function App() {
     init();
   }, [initializeSettings]);
 
+  // 监听从书架打开书籍的事件
+  useEffect(() => {
+    const handleOpenBook = (event: CustomEvent<{ filePath: string }>) => {
+      const { filePath } = event.detail;
+      setPendingBookPath(filePath);
+      setCurrentPage('reader');
+    };
+
+    window.addEventListener('openBookFromBookshelf', handleOpenBook as EventListener);
+    return () => {
+      window.removeEventListener('openBookFromBookshelf', handleOpenBook as EventListener);
+    };
+  }, []);
+
   const menuItems = [
+    {
+      key: 'bookshelf',
+      icon: <BookFilled />,
+      label: '书架',
+    },
     {
       key: 'reader',
       icon: <ReadOutlined />,
@@ -51,16 +73,28 @@ function App() {
     },
   ];
 
+  const handleOpenBookFromBookshelf = (filePath: string) => {
+    setPendingBookPath(filePath);
+    setCurrentPage('reader');
+  };
+
   const renderPage = () => {
     switch (currentPage) {
       case 'reader':
-        return <ReaderPage />;
+        return (
+          <ReaderPage 
+            initialFilePath={pendingBookPath || undefined}
+            onClearInitialFile={() => setPendingBookPath(null)}
+          />
+        );
+      case 'bookshelf':
+        return <BookshelfPage onOpenBook={handleOpenBookFromBookshelf} />;
       case 'wordbook':
         return <WordBookPage />;
       case 'settings':
         return <SettingsPage />;
       default:
-        return <ReaderPage />;
+        return <BookshelfPage onOpenBook={handleOpenBookFromBookshelf} />;
     }
   };
 

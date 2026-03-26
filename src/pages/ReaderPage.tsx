@@ -32,7 +32,12 @@ const levelOrder = [
   VocabularyLevel.TEM8,
 ];
 
-const ReaderPage: React.FC = () => {
+interface ReaderPageProps {
+  initialFilePath?: string;
+  onClearInitialFile?: () => void;
+}
+
+const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitialFile }) => {
   const [fileContent, setFileContent] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
   const [filePath, setFilePath] = useState<string>('');
@@ -79,6 +84,14 @@ const ReaderPage: React.FC = () => {
     loadSettings();
     loadKnownWords();
   }, []);
+
+  // 处理从书架传入的文件路径
+  useEffect(() => {
+    if (initialFilePath) {
+      loadFile(initialFilePath);
+      onClearInitialFile?.();
+    }
+  }, [initialFilePath]);
 
   const loadSettings = async () => {
     try {
@@ -222,6 +235,22 @@ const ReaderPage: React.FC = () => {
       });
       
       message.success('文件加载成功');
+      
+      // 添加到书架（阅读记录）
+      try {
+        await window.electron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
+          bookName: result.metadata?.title || fileNameFromPath,
+          filePath: path,
+          format: path.split('.').pop() || '',
+          progress: 0,
+          currentPosition: '0',
+          bookmarks: '[]',
+          lastReadAt: new Date().toISOString(),
+        });
+        console.log('[ReaderPage] 已添加到书架');
+      } catch (err) {
+        console.error('[ReaderPage] 添加到书架失败:', err);
+      }
       
       // 第四阶段：后台加载剩余内容和分析
       if (remainingChunk.length > 0) {
