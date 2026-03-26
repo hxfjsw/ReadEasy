@@ -90,7 +90,7 @@ export function registerIPCHandlers(
           metadata: {
             title: book.title,
             author: book.author,
-            chapters: book.chapters.map(c => ({ id: c.id, title: c.title })),
+            chapters: book.chapters.map(c => ({ id: c.id, title: c.title, content: c.content })),
           }
         };
       } else if (ext === '.txt') {
@@ -103,7 +103,7 @@ export function registerIPCHandlers(
           metadata: {
             title: book.title,
             author: book.author,
-            chapters: book.chapters.map(c => ({ id: c.id, title: c.title })),
+            chapters: book.chapters.map(c => ({ id: c.id, title: c.title, content: c.content })),
           }
         };
       } else {
