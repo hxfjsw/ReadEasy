@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseService } from '../../services/database';
@@ -13,11 +13,23 @@ export function registerIPCHandlers(
   
   console.log('[IPC] Registering IPC handlers...');
   
+  // 获取主窗口的辅助函数
+  const getMainWindow = (): BrowserWindow | undefined => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) return win;
+    
+    const allWindows = BrowserWindow.getAllWindows();
+    return allWindows.length > 0 ? allWindows[0] : undefined;
+  };
+  
   // 文件操作
   ipcMain.handle('file:open', async () => {
     console.log('[IPC] file:open called');
     try {
-      const result = await dialog.showOpenDialog({
+      const parentWindow = getMainWindow();
+      console.log('[IPC] file:open parent window:', parentWindow ? 'found' : 'not found');
+      
+      const result = await dialog.showOpenDialog(parentWindow as any, {
         properties: ['openFile'],
         filters: [
           { name: 'Ebooks', extensions: ['epub', 'mobi', 'txt'] },
@@ -228,14 +240,12 @@ export function registerIPCHandlers(
   // 窗口控制
   ipcMain.handle('window:minimize', async () => {
     console.log('[IPC] window:minimize called');
-    const { BrowserWindow } = require('electron');
     const win = BrowserWindow.getFocusedWindow();
     win?.minimize();
   });
 
   ipcMain.handle('window:maximize', async () => {
     console.log('[IPC] window:maximize called');
-    const { BrowserWindow } = require('electron');
     const win = BrowserWindow.getFocusedWindow();
     if (win?.isMaximized()) {
       win.unmaximize();
@@ -246,7 +256,6 @@ export function registerIPCHandlers(
 
   ipcMain.handle('window:close', async () => {
     console.log('[IPC] window:close called');
-    const { BrowserWindow } = require('electron');
     const win = BrowserWindow.getFocusedWindow();
     win?.close();
   });
