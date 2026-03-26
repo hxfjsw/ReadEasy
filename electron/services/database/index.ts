@@ -380,6 +380,9 @@ export class DatabaseService {
   getReadingRecords(): schema.ReadingRecord[] {
     const records = this.db.prepare('SELECT * FROM reading_records ORDER BY last_read_at DESC').all() as schema.ReadingRecord[];
     console.log('[DB] getReadingRecords:', records.length, 'records');
+    records.forEach((r, i) => {
+      console.log(`[DB] Record ${i}: id=${r.id}, name=${r.bookName}, path=${r.filePath}, lastReadAt=${r.lastReadAt}`);
+    });
     return records;
   }
 
