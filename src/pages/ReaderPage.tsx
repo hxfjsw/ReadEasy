@@ -75,7 +75,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const [translatedSentence, setTranslatedSentence] = useState<string>('');
   const [sentencePopupVisible, setSentencePopupVisible] = useState(false);
   const [sentenceTranslating, setSentenceTranslating] = useState(false);
-  const [sentenceTranslateSource, setSentenceTranslateSource] = useState<'google' | 'ai'>('google');
+  const [sentenceTranslateSource, setSentenceTranslateSource] = useState<'google' | 'ai'>('ai');
   const sentencePopupRef = useRef<HTMLDivElement>(null);
   
   // 全文朗读状态

@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Button, List, Card, Empty, Input, message, Popconfirm, Tag, Statistic, Row, Col } from 'antd';
-import { DeleteOutlined, SearchOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Button, List, Card, Empty, Input, message, Popconfirm, Tag, Statistic, Row, Col, Upload } from 'antd';
+import { DeleteOutlined, SearchOutlined, CheckCircleOutlined, PlusOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
+
 
 const MasteredWordsPage: React.FC = () => {
   const [masteredWords, setMasteredWords] = useState<string[]>([]);
   const [filteredWords, setFilteredWords] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [newWord, setNewWord] = useState('');
+  const [adding, setAdding] = useState(false);
+
 
   // 加载熟词本
   const loadMasteredWords = async () => {
@@ -39,6 +43,35 @@ const MasteredWordsPage: React.FC = () => {
     }
   }, [searchTerm, masteredWords]);
 
+  // 添加单个单词
+  const handleAddWord = async () => {
+    if (!newWord.trim()) {
+      message.warning('请输入单词');
+      return;
+    }
+    
+    setAdding(true);
+    try {
+      const result = await window.electron.ipcRenderer.invoke('db:addMasteredWord', newWord.trim());
+      if (result.success) {
+        if (result.existed) {
+          message.info(`"${newWord}" 已经是熟词`);
+        } else {
+          message.success(`"${newWord}" 已添加到熟词本`);
+          setNewWord('');
+          loadMasteredWords();
+        }
+      } else {
+        message.error('添加失败');
+      }
+    } catch (error) {
+      console.error('添加熟词失败:', error);
+      message.error('添加失败');
+    } finally {
+      setAdding(false);
+    }
+  };
+
   // 移除熟词
   const handleRemove = async (word: string) => {
     try {
@@ -58,7 +91,6 @@ const MasteredWordsPage: React.FC = () => {
   // 清空所有熟词
   const handleClearAll = async () => {
     try {
-      // 逐个删除所有熟词
       for (const word of masteredWords) {
         await window.electron.ipcRenderer.invoke('db:removeMasteredWord', word);
       }
@@ -67,6 +99,66 @@ const MasteredWordsPage: React.FC = () => {
     } catch (error) {
       console.error('清空熟词本失败:', error);
       message.error('清空失败');
+    }
+  };
+
+  // 导出熟词本
+  const handleExport = () => {
+    if (masteredWords.length === 0) {
+      message.warning('熟词本为空，无法导出');
+      return;
+    }
+
+    const content = masteredWords.join('\n');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `熟词本_${masteredWords.length}个单词.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    message.success('熟词本已导出');
+  };
+
+  // 导入熟词本
+  const handleImport = async (file: File) => {
+    try {
+      const text = await file.text();
+      // 支持换行、逗号、分号分隔
+      const words = text
+        .split(/[\n,;]/)
+        .map(w => w.trim().toLowerCase())
+        .filter(w => w && /^[a-zA-Z]+$/.test(w));
+      
+      if (words.length === 0) {
+        message.warning('文件中没有找到有效的单词');
+        return false;
+      }
+
+      let addedCount = 0;
+      let existedCount = 0;
+
+      for (const word of words) {
+        const result = await window.electron.ipcRenderer.invoke('db:addMasteredWord', word);
+        if (result.success) {
+          if (result.existed) {
+            existedCount++;
+          } else {
+            addedCount++;
+          }
+        }
+      }
+
+      loadMasteredWords();
+      message.success(`导入完成：新增 ${addedCount} 个，已存在 ${existedCount} 个`);
+      return false; // 阻止默认上传行为
+    } catch (error) {
+      console.error('导入失败:', error);
+      message.error('导入失败');
+      return false;
     }
   };
 
@@ -88,6 +180,20 @@ const MasteredWordsPage: React.FC = () => {
             style={{ width: 200 }}
             allowClear
           />
+          <Button 
+            icon={<DownloadOutlined />}
+            onClick={handleExport}
+            disabled={masteredWords.length === 0}
+          >
+            导出
+          </Button>
+          <Upload
+            accept=".txt,.csv,.json"
+            showUploadList={false}
+            beforeUpload={handleImport}
+          >
+            <Button icon={<UploadOutlined />}>导入</Button>
+          </Upload>
           {masteredWords.length > 0 && (
             <Popconfirm
               title="确定清空熟词本？"
@@ -102,6 +208,28 @@ const MasteredWordsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* 添加单词 */}
+      <Card className="mb-6">
+        <div className="flex items-center gap-3">
+          <Input
+            placeholder="输入单词添加到熟词本..."
+            value={newWord}
+            onChange={(e) => setNewWord(e.target.value)}
+            onPressEnter={handleAddWord}
+            style={{ width: 300 }}
+          />
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />}
+            onClick={handleAddWord}
+            loading={adding}
+          >
+            添加
+          </Button>
+          <span className="text-gray-400 text-sm">按 Enter 快速添加</span>
+        </div>
+      </Card>
 
       {/* 统计信息 */}
       <Row gutter={16} className="mb-6">
@@ -141,7 +269,7 @@ const MasteredWordsPage: React.FC = () => {
             description={
               searchTerm 
                 ? '没有找到匹配的单词' 
-                : '熟词本为空，阅读时可将已掌握的单词标记为熟词'
+                : '熟词本为空，阅读时可将已掌握的单词标记为熟词，或手动添加'
             }
             className="mt-20"
           />

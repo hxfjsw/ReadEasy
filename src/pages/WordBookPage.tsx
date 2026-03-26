@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input, Divider } from 'antd';
-import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined, SoundOutlined } from '@ant-design/icons';
+import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined, SoundOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { WordBook, WordBookItem } from '../types';
 
 const WordBookPage: React.FC = () => {
@@ -60,6 +60,25 @@ const WordBookPage: React.FC = () => {
       loadWordsInBook(selectedBookId);
     } catch (error) {
       message.error('删除失败');
+    }
+  };
+
+  // 标记为熟词
+  const handleMarkAsMastered = async (word: string) => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('db:addMasteredWord', word);
+      if (result.success) {
+        if (result.existed) {
+          message.info(`"${word}" 已经是熟词`);
+        } else {
+          message.success(`"${word}" 已标记为熟词`);
+        }
+      } else {
+        message.error('标记失败');
+      }
+    } catch (error) {
+      console.error('标记熟词失败:', error);
+      message.error('标记失败');
     }
   };
 
@@ -299,6 +318,17 @@ const WordBookPage: React.FC = () => {
                         }}
                       >
                         朗读
+                      </Button>,
+                      <Button
+                        type="text"
+                        icon={<CheckCircleOutlined />}
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAsMastered(word.word);
+                        }}
+                      >
+                        标熟
                       </Button>,
                       <Popconfirm
                         title="确定删除这个单词吗？"
