@@ -32,7 +32,7 @@ export interface VocabularyAnalysis {
 
 export class AIService {
   private dbService: DatabaseService;
-  private clients: Map<number, OpenAI> = new Map();
+  private clients: Map<string, OpenAI> = new Map();
 
   constructor(dbService: DatabaseService) {
     this.dbService = dbService;
@@ -59,14 +59,18 @@ export class AIService {
       throw new Error('API key is not configured');
     }
 
+    // 使用配置ID和baseUrl的组合作为缓存key，确保配置变更时重新创建客户端
+    const cacheKey = `${config.id}_${config.baseUrl}`;
+    
     // 检查缓存的客户端
-    let client = this.clients.get(config.id);
+    let client = this.clients.get(cacheKey);
     if (!client) {
+      console.log('[AIService] Creating new OpenAI client for:', config.name, 'baseURL:', config.baseUrl);
       client = new OpenAI({
         apiKey: config.apiKey,
         baseURL: config.baseUrl,
       });
-      this.clients.set(config.id, client);
+      this.clients.set(cacheKey, client);
     }
 
     return { client, config };
@@ -75,6 +79,7 @@ export class AIService {
   // 测试连接
   async testConnection(config: Omit<AIConfig, 'id' | 'createdAt'>): Promise<{ success: boolean; message: string }> {
     try {
+      console.log('[AIService] Testing connection to:', config.baseUrl);
       const client = new OpenAI({
         apiKey: config.apiKey,
         baseURL: config.baseUrl,

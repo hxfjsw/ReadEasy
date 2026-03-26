@@ -161,6 +161,7 @@ const SettingsPage: React.FC = () => {
       key: 'provider',
       render: (provider: string) => ({
         openai: 'OpenAI',
+        'openai-compatible': 'OpenAI Compatible',
         azure: 'Azure OpenAI',
         anthropic: 'Anthropic',
         custom: '自定义',
@@ -326,6 +327,7 @@ const SettingsPage: React.FC = () => {
                 >
                   <Select>
                     <Option value="openai">OpenAI</Option>
+                    <Option value="openai-compatible">OpenAI Compatible (第三方兼容接口)</Option>
                     <Option value="azure">Azure OpenAI</Option>
                     <Option value="anthropic">Anthropic</Option>
                     <Option value="custom">自定义</Option>
