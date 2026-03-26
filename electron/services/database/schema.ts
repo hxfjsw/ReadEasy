@@ -86,6 +86,13 @@ export const settings = sqliteTable('settings', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+// 熟词本表 - 只记录单词本身，不需要详细释义
+export const masteredWords = sqliteTable('mastered_words', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  word: text('word').notNull().unique(), // 单词本身（小写存储）
+  addedAt: integer('added_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 // 导出类型
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -101,3 +108,5 @@ export type AIConfig = typeof aiConfigs.$inferSelect;
 export type NewAIConfig = typeof aiConfigs.$inferInsert;
 export type Setting = typeof settings.$inferSelect;
 export type NewSetting = typeof settings.$inferInsert;
+export type MasteredWord = typeof masteredWords.$inferSelect;
+export type NewMasteredWord = typeof masteredWords.$inferInsert;

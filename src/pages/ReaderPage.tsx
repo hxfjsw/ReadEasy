@@ -251,11 +251,11 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
 
   const loadKnownWords = async () => {
     try {
-      // 从用户设置加载已掌握单词
-      const user = await window.electron.ipcRenderer.invoke('db:getUser');
-      if (user?.customWords) {
-        const words = JSON.parse(user.customWords);
-        setKnownWords(new Set(words.map((w: string) => w.toLowerCase())));
+      // 从熟词本加载已掌握单词
+      const masteredWords = await window.electron.ipcRenderer.invoke('db:getMasteredWords');
+      if (masteredWords && masteredWords.length > 0) {
+        setKnownWords(new Set(masteredWords.map((w: string) => w.toLowerCase())));
+        console.log('[ReaderPage] 加载熟词:', masteredWords.length, '个');
       }
     } catch (error) {
       console.error('加载已掌握单词失败:', error);
@@ -1200,6 +1200,18 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           onPlayPronunciation={playPronunciation}
           mode="sidebar"
           bookName={fileName}
+          onMasteredStatusChange={(word, isMastered) => {
+            // 更新本地熟词集合
+            setKnownWords(prev => {
+              const newSet = new Set(prev);
+              if (isMastered) {
+                newSet.add(word.toLowerCase());
+              } else {
+                newSet.delete(word.toLowerCase());
+              }
+              return newSet;
+            });
+          }}
         />
       </div>
 

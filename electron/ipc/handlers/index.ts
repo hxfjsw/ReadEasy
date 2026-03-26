@@ -206,6 +206,26 @@ export function registerIPCHandlers(
     return dbService.getWordsDueForReview();
   });
 
+  // 数据库操作 - 熟词本
+  ipcMain.handle('db:addMasteredWord', async (_, word: string) => {
+    console.log('[IPC] db:addMasteredWord called:', word);
+    return dbService.addMasteredWord(word);
+  });
+
+  ipcMain.handle('db:removeMasteredWord', async (_, word: string) => {
+    console.log('[IPC] db:removeMasteredWord called:', word);
+    return dbService.removeMasteredWord(word);
+  });
+
+  ipcMain.handle('db:isMasteredWord', async (_, word: string) => {
+    return dbService.isMasteredWord(word);
+  });
+
+  ipcMain.handle('db:getMasteredWords', async () => {
+    console.log('[IPC] db:getMasteredWords called');
+    return dbService.getMasteredWords();
+  });
+
   // 数据库操作 - AI配置
   ipcMain.handle('db:getAIConfigs', async () => {
     console.log('[IPC] db:getAIConfigs called');

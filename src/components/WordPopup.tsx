@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Modal, Spin, Button, Tag, message, Select } from 'antd';
-import { PlusOutlined, BookOutlined, SoundOutlined, CloseOutlined } from '@ant-design/icons';
+import { PlusOutlined, BookOutlined, SoundOutlined, CloseOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type { WordDefinition, WordBook, Word } from '../types';
 
 interface WordPopupProps {
@@ -11,6 +11,7 @@ interface WordPopupProps {
   onPlayPronunciation?: (word: string) => void;
   mode?: 'modal' | 'sidebar';
   bookName?: string; // 当前书籍名称，用于自动创建单词本
+  onMasteredStatusChange?: (word: string, isMastered: boolean) => void; // 熟词状态变化回调
 }
 
 const WordPopup: React.FC<WordPopupProps> = ({ 
@@ -20,7 +21,8 @@ const WordPopup: React.FC<WordPopupProps> = ({
   onClose, 
   onPlayPronunciation,
   mode = 'modal',
-  bookName
+  bookName,
+  onMasteredStatusChange
 }) => {
   const [loading, setLoading] = useState(false);
   const [definition, setDefinition] = useState<WordDefinition | null>(null);
@@ -28,14 +30,27 @@ const WordPopup: React.FC<WordPopupProps> = ({
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const [addingToBook, setAddingToBook] = useState(false);
   const [source, setSource] = useState<'wordbook' | 'ai' | null>(null);
+  const [isMastered, setIsMastered] = useState(false);
+  const [masteringWord, setMasteringWord] = useState(false);
 
-  // 获取单词定义
+  // 获取单词定义和熟词状态
   useEffect(() => {
     if (visible && word) {
       fetchDefinition();
       fetchWordBooks();
+      checkMasteredStatus();
     }
   }, [visible, word]);
+  
+  // 检查是否是熟词
+  const checkMasteredStatus = async () => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('db:isMasteredWord', word.toLowerCase());
+      setIsMastered(result);
+    } catch (error) {
+      console.error('检查熟词状态失败:', error);
+    }
+  };
 
   // 将数据库单词转换为 WordDefinition 格式
   const convertWordToDefinition = (wordData: Word): WordDefinition => {
@@ -137,6 +152,47 @@ const WordPopup: React.FC<WordPopupProps> = ({
       message.error('获取单词定义失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 标记为熟词
+  const handleMarkAsMastered = async () => {
+    if (!word) return;
+    
+    setMasteringWord(true);
+    try {
+      const result = await window.electron.ipcRenderer.invoke('db:addMasteredWord', word.toLowerCase());
+      if (result.success) {
+        setIsMastered(true);
+        message.success(`"${word}" 已标记为熟词`);
+        onMasteredStatusChange?.(word, true);
+      } else {
+        message.error('标记熟词失败');
+      }
+    } catch (error) {
+      console.error('标记熟词失败:', error);
+      message.error('标记熟词失败');
+    } finally {
+      setMasteringWord(false);
+    }
+  };
+  
+  // 取消熟词标记
+  const handleUnmarkAsMastered = async () => {
+    if (!word) return;
+    
+    try {
+      const result = await window.electron.ipcRenderer.invoke('db:removeMasteredWord', word.toLowerCase());
+      if (result) {
+        setIsMastered(false);
+        message.success(`"${word}" 已取消熟词标记`);
+        onMasteredStatusChange?.(word, false);
+      } else {
+        message.error('取消熟词标记失败');
+      }
+    } catch (error) {
+      console.error('取消熟词标记失败:', error);
+      message.error('取消熟词标记失败');
     }
   };
 
@@ -275,6 +331,9 @@ const WordPopup: React.FC<WordPopupProps> = ({
             <h2 className="text-2xl font-bold">{definition.word}</h2>
             {definition.level && (
               <Tag color="blue">{definition.level}</Tag>
+            )}
+            {isMastered && (
+              <Tag color="green" icon={<CheckCircleOutlined />}>熟词</Tag>
             )}
             {renderSourceBadge()}
             {onPlayPronunciation && (
@@ -433,6 +492,30 @@ const WordPopup: React.FC<WordPopupProps> = ({
             )}
           </div>
         )}
+
+        {/* 熟词操作 */}
+        <div className="border-t pt-4 mt-4">
+          {isMastered ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-green-600">
+                <CheckCircleOutlined />
+                <span>已掌握该单词</span>
+              </div>
+              <Button onClick={handleUnmarkAsMastered}>
+                取消熟词
+              </Button>
+            </div>
+          ) : (
+            <Button
+              icon={<CheckCircleOutlined />}
+              loading={masteringWord}
+              onClick={handleMarkAsMastered}
+              block
+            >
+              标记为熟词（不再提示）
+            </Button>
+          )}
+        </div>
 
         {/* 添加到单词本 - 仅 AI 来源时显示 */}
         {source === 'ai' && (

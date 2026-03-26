@@ -24,6 +24,12 @@ export interface IPCChannels {
   'db:updateWordReview': (itemId: number) => Promise<boolean>;
   'db:getWordsDueForReview': () => Promise<any[]>;
   
+  // 数据库操作 - 熟词本
+  'db:addMasteredWord': (word: string) => Promise<{ success: boolean; id?: number; existed?: boolean }>;
+  'db:removeMasteredWord': (word: string) => Promise<boolean>;
+  'db:isMasteredWord': (word: string) => Promise<boolean>;
+  'db:getMasteredWords': () => Promise<string[]>;
+  
   // 数据库操作 - AI配置
   'db:getAIConfigs': () => Promise<any[]>;
   'db:getDefaultAIConfig': () => Promise<any>;

@@ -133,11 +133,21 @@ export class DatabaseService {
       )
     `);
 
+    // 熟词本表 - 只记录单词本身
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS mastered_words (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word TEXT NOT NULL UNIQUE,
+        added_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )
+    `);
+
     // 创建索引
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_words_word ON words(word)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_words_level ON words(level)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_word_book_items_book_id ON word_book_items(word_book_id)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_reading_records_path ON reading_records(file_path)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_mastered_words_word ON mastered_words(word)`);
     
     // 迁移：为 word_book_items 添加复习相关字段
     this.migrateWordBookItems();
@@ -572,6 +582,71 @@ export class DatabaseService {
       VALUES (?, ?, unixepoch())
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = unixepoch()
     `).run(key, value);
+  }
+
+  // 熟词本相关操作
+  
+  // 添加熟词
+  addMasteredWord(word: string): { success: boolean; id?: number; existed?: boolean } {
+    try {
+      const result = this.db.prepare(`
+        INSERT INTO mastered_words (word, added_at)
+        VALUES (?, unixepoch())
+        ON CONFLICT(word) DO UPDATE SET added_at = unixepoch()
+      `).run(word.toLowerCase().trim());
+      
+      console.log('[DB] addMasteredWord:', word, 'id:', result.lastInsertRowid);
+      return { 
+        success: true, 
+        id: Number(result.lastInsertRowid),
+        existed: result.changes === 0 
+      };
+    } catch (error) {
+      console.error('[DB] addMasteredWord error:', error);
+      return { success: false };
+    }
+  }
+  
+  // 删除熟词
+  removeMasteredWord(word: string): boolean {
+    try {
+      const result = this.db.prepare(`
+        DELETE FROM mastered_words WHERE word = ?
+      `).run(word.toLowerCase().trim());
+      
+      console.log('[DB] removeMasteredWord:', word, 'changes:', result.changes);
+      return result.changes > 0;
+    } catch (error) {
+      console.error('[DB] removeMasteredWord error:', error);
+      return false;
+    }
+  }
+  
+  // 查询是否是熟词
+  isMasteredWord(word: string): boolean {
+    const result = this.db.prepare(`
+      SELECT 1 FROM mastered_words WHERE word = ?
+    `).get(word.toLowerCase().trim());
+    
+    return !!result;
+  }
+  
+  // 获取所有熟词
+  getMasteredWords(): string[] {
+    const rows = this.db.prepare(`
+      SELECT word FROM mastered_words ORDER BY added_at DESC
+    `).all() as { word: string }[];
+    
+    return rows.map(r => r.word);
+  }
+  
+  // 获取熟词数量
+  getMasteredWordCount(): number {
+    const result = this.db.prepare(`
+      SELECT COUNT(*) as count FROM mastered_words
+    `).get() as { count: number };
+    
+    return result?.count || 0;
   }
 
   // 关闭数据库
