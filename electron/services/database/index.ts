@@ -243,15 +243,25 @@ export class DatabaseService {
 
   // 单词本相关操作
   getWordBooks(): schema.WordBook[] {
-    return this.db.prepare('SELECT * FROM word_books ORDER BY created_at DESC').all() as schema.WordBook[];
+    console.log('[DB] getWordBooks called');
+    const result = this.db.prepare('SELECT * FROM word_books ORDER BY created_at DESC').all() as schema.WordBook[];
+    console.log('[DB] getWordBooks result:', result);
+    return result;
   }
 
   addWordBook(data: schema.NewWordBook): number {
-    const result = this.db.prepare(`
-      INSERT INTO word_books (name, description, source)
-      VALUES (?, ?, ?)
-    `).run(data.name, data.description || null, data.source || null);
-    return Number(result.lastInsertRowid);
+    console.log('[DB] addWordBook called with:', data);
+    try {
+      const result = this.db.prepare(`
+        INSERT INTO word_books (name, description, source)
+        VALUES (?, ?, ?)
+      `).run(data.name, data.description || null, data.source || null);
+      console.log('[DB] addWordBook success, lastInsertRowid:', result.lastInsertRowid);
+      return Number(result.lastInsertRowid);
+    } catch (error: any) {
+      console.error('[DB] addWordBook error:', error);
+      throw error;
+    }
   }
 
   deleteWordBook(id: number): void {

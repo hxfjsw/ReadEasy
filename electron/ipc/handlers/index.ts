@@ -148,8 +148,15 @@ export function registerIPCHandlers(
   });
 
   ipcMain.handle('db:addWordBook', async (_, data: any) => {
-    console.log('[IPC] db:addWordBook called');
-    return dbService.addWordBook(data);
+    console.log('[IPC] db:addWordBook called with:', data);
+    try {
+      const id = dbService.addWordBook(data);
+      console.log('[IPC] db:addWordBook success, id:', id);
+      return { success: true, id };
+    } catch (error: any) {
+      console.error('[IPC] db:addWordBook error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:deleteWordBook', async (_, id: number) => {
