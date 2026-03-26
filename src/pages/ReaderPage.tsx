@@ -54,6 +54,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [currentChapter, setCurrentChapter] = useState<number>(0);
   const [chapterDrawerOpen, setChapterDrawerOpen] = useState(false);
+  const [chapterStartPages, setChapterStartPages] = useState<number[]>([]); // 每个章节的起始页码
   
   // 阅读设置
   const [fontSize, setFontSize] = useState<number>(18);
@@ -148,6 +149,16 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
     return pages;
   };
   
+  // 根据当前页码更新当前章节
+  const updateCurrentChapterByPage = (pageNum: number) => {
+    for (let i = chapterStartPages.length - 1; i >= 0; i--) {
+      if (pageNum >= chapterStartPages[i]) {
+        setCurrentChapter(i);
+        break;
+      }
+    }
+  };
+  
   // 翻页函数
   const goToPreviousPage = () => {
     if (currentPage > 0) {
@@ -156,6 +167,8 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       setFileContent(pageContents[newPage]);
       // 分析新页面的词汇
       analyzeVocabulary(pageContents[newPage]).catch(console.error);
+      // 更新当前章节
+      updateCurrentChapterByPage(newPage);
       // 保存进度
       saveReadingProgressForPage(newPage);
     }
@@ -168,6 +181,8 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       setFileContent(pageContents[newPage]);
       // 分析新页面的词汇
       analyzeVocabulary(pageContents[newPage]).catch(console.error);
+      // 更新当前章节
+      updateCurrentChapterByPage(newPage);
       // 保存进度
       saveReadingProgressForPage(newPage);
     }
@@ -178,6 +193,8 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       setCurrentPage(pageNum);
       setFileContent(pageContents[pageNum]);
       analyzeVocabulary(pageContents[pageNum]).catch(console.error);
+      // 更新当前章节
+      updateCurrentChapterByPage(pageNum);
       // 保存进度
       saveReadingProgressForPage(pageNum);
     }
@@ -312,24 +329,6 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       
       console.log('[ReaderPage] File loaded successfully, content length:', result.data?.length);
       
-      // 设置章节信息
-      let parsedChapters: Chapter[] = [];
-      if (result.metadata?.chapters && result.metadata.chapters.length > 0) {
-        // 使用解析的章节
-        parsedChapters = result.metadata.chapters.map((c: any) => ({
-          id: c.id,
-          title: c.title,
-          content: '', // 内容已合并到 fileContent
-        }));
-      } else {
-        // 单文件作为一个章节
-        parsedChapters = [{
-          id: '1',
-          title: fileNameFromPath,
-          content: result.data || '',
-        }];
-      }
-      
       // 第三阶段：处理分页内容
       setLoadingState({
         isLoading: true,
@@ -340,15 +339,50 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       
       // 设置基础信息
       setFileName(fileNameFromPath);
-      setChapters(parsedChapters);
-      setCurrentChapter(0);
       
-      // 分页处理
-      const fullContent = result.data || '';
-      const pages = splitContentIntoPages(fullContent, PAGE_SIZE);
+      // 处理 EPUB 章节和分页
+      let pages: string[] = [];
+      let startPages: number[] = [];
+      
+      if (result.metadata?.chapters && result.metadata.chapters.length > 0) {
+        // EPUB 文件：保留章节结构，分别分页
+        const epubChapters = result.metadata.chapters.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          content: c.content || '',
+        }));
+        
+        // 分别对每个章节分页，并记录起始页码
+        let currentPageIndex = 0;
+        const allPages: string[] = [];
+        
+        for (const chapter of epubChapters) {
+          startPages.push(currentPageIndex);
+          const chapterPages = splitContentIntoPages(chapter.content, PAGE_SIZE);
+          allPages.push(...chapterPages);
+          currentPageIndex += chapterPages.length;
+        }
+        
+        pages = allPages;
+        setChapters(epubChapters);
+        console.log('[ReaderPage] EPUB 章节分页完成:', epubChapters.length, '章节,', pages.length, '页');
+      } else {
+        // 单文件：直接分页
+        const fullContent = result.data || '';
+        pages = splitContentIntoPages(fullContent, PAGE_SIZE);
+        setChapters([{
+          id: '1',
+          title: fileNameFromPath,
+          content: fullContent,
+        }]);
+        startPages = [0];
+      }
+      
+      setChapterStartPages(startPages);
       setPageContents(pages);
       setTotalPages(pages.length);
       setCurrentPage(0);
+      setCurrentChapter(0);
       setFileContent(pages[0] || '');
       
       // 显示完成，结束loading状态
@@ -719,13 +753,12 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
 
   // 跳转到指定章节
   const jumpToChapter = (index: number) => {
-    setCurrentChapter(index);
-    setChapterDrawerOpen(false);
-    // 简单实现：按章节比例滚动
-    if (contentRef.current && chapters.length > 0) {
-      const scrollHeight = contentRef.current.scrollHeight;
-      const targetPosition = (index / chapters.length) * scrollHeight;
-      contentRef.current.scrollTo(0, targetPosition);
+    if (index >= 0 && index < chapterStartPages.length) {
+      const targetPage = chapterStartPages[index];
+      setCurrentChapter(index);
+      setChapterDrawerOpen(false);
+      // 跳转到章节起始页
+      goToPage(targetPage);
     }
   };
 
@@ -1154,21 +1187,34 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         width={300}
       >
         <div className="space-y-1">
-          {chapters.map((chapter, index) => (
-            <div
-              key={chapter.id}
-              className={`p-3 rounded cursor-pointer transition-colors ${
-                currentChapter === index 
-                  ? 'bg-blue-100 text-blue-700' 
-                  : 'hover:bg-gray-100'
-              }`}
-              onClick={() => jumpToChapter(index)}
-            >
-              <div className="text-sm font-medium truncate">
-                {index + 1}. {chapter.title}
+          {chapters.map((chapter, index) => {
+            const startPage = chapterStartPages[index] || 0;
+            const endPage = index < chapters.length - 1 
+              ? (chapterStartPages[index + 1] || totalPages) - 1 
+              : totalPages - 1;
+            const isCurrent = currentChapter === index;
+            
+            return (
+              <div
+                key={chapter.id}
+                className={`p-3 rounded cursor-pointer transition-colors ${
+                  isCurrent
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'hover:bg-gray-100'
+                }`}
+                onClick={() => jumpToChapter(index)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium truncate flex-1">
+                    {index + 1}. {chapter.title}
+                  </div>
+                  <div className={`text-xs ml-2 ${isCurrent ? 'text-blue-500' : 'text-gray-400'}`}>
+                    P{startPage + 1}{startPage !== endPage && `-${endPage + 1}`}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Drawer>
 
