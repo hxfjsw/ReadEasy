@@ -3,7 +3,7 @@ import { Button, message, Tag, Spin, Empty, Drawer, Slider, Select, Tooltip, Pro
 import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined, TranslationOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import WordPopup from '../components/WordPopup';
 import { useSettingsStore } from '../stores/settingsStore';
-import { VocabularyLevel, VocabularyLevelLabels } from '../types';
+import { VocabularyLevel } from '../types';
 
 interface Chapter {
   id: string;
@@ -75,6 +75,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const [translatedSentence, setTranslatedSentence] = useState<string>('');
   const [sentencePopupVisible, setSentencePopupVisible] = useState(false);
   const [sentenceTranslating, setSentenceTranslating] = useState(false);
+  const [sentenceTranslateSource, setSentenceTranslateSource] = useState<'google' | 'ai'>('google');
   const sentencePopupRef = useRef<HTMLDivElement>(null);
   
   // 全文朗读状态
@@ -508,22 +509,33 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   }, []);
 
   // 处理句子翻译
-  const handleSentenceTranslate = async (text: string) => {
+  const handleSentenceTranslate = async (text: string, source?: 'google' | 'ai') => {
     if (!text || text.trim().length < 2) return;
     
-    console.log('[ReaderPage] Translating sentence:', text.substring(0, 50) + '...');
+    const useSource = source || sentenceTranslateSource;
+    console.log('[ReaderPage] Translating sentence:', text.substring(0, 50) + '...', 'source:', useSource);
     setSelectedSentence(text);
     setSentenceTranslating(true);
     setSentencePopupVisible(true);
     
     try {
-      const result = await window.electron.ipcRenderer.invoke('translate:sentence', {
-        text: text.trim(),
-        targetLang: 'zh-CN',
-      });
+      let result;
+      
+      if (useSource === 'ai') {
+        // 使用 AI 翻译
+        result = await window.electron.ipcRenderer.invoke('ai:translate', {
+          text: text.trim(),
+        });
+      } else {
+        // 使用 Google 翻译
+        result = await window.electron.ipcRenderer.invoke('translate:sentence', {
+          text: text.trim(),
+          targetLang: 'zh-CN',
+        });
+      }
       
       if (result.success) {
-        setTranslatedSentence(result.data.translatedText);
+        setTranslatedSentence(result.data?.translatedText || result.data || result.translation || result.text || '翻译完成');
       } else {
         message.error(result.message || '翻译失败');
         setTranslatedSentence('翻译失败');
@@ -534,6 +546,14 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       setTranslatedSentence('翻译失败');
     } finally {
       setSentenceTranslating(false);
+    }
+  };
+  
+  // 切换句子翻译源并重新翻译
+  const switchSentenceTranslateSource = async (newSource: 'google' | 'ai') => {
+    setSentenceTranslateSource(newSource);
+    if (selectedSentence) {
+      await handleSentenceTranslate(selectedSentence, newSource);
     }
   };
 
@@ -843,20 +863,11 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const renderHighlightedContent = () => {
     return (
       <div className="flex flex-col h-full">
-        {/* 页面内容 */}
+        {/* 页面内容 - 简洁模式 */}
         <div 
           className={`flex-1 reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} shadow-sm overflow-hidden`}
           style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
         >
-          <div className={`mb-6 pb-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-            <h2 className={`text-2xl font-bold ${themeStyles.text}`}>{fileName}</h2>
-            <div className="flex items-center gap-4 mt-2">
-              <Tag color="blue">朗读中</Tag>
-              <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                第 {currentSentenceIndex + 1} / {sentences.length} 句
-              </span>
-            </div>
-          </div>
           <div className={`${themeStyles.text} whitespace-pre-wrap`}>
             {sentences.map((sentence, index) => (
               <span
@@ -958,21 +969,11 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
 
     return (
       <div className="flex flex-col h-full">
-        {/* 页面内容 */}
+        {/* 页面内容 - 简洁模式，隐藏顶部信息栏 */}
         <div 
           className={`flex-1 reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} shadow-sm overflow-hidden`}
           style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
         >
-          <div className={`mb-6 pb-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-            <h2 className={`text-2xl font-bold ${themeStyles.text}`}>{fileName}</h2>
-            <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-              提示：点击英文单词可查看释义并添加到单词本，带下划线的为生词
-            </p>
-            <div className="flex gap-2 mt-2">
-              <Tag color="blue">词汇水平: {VocabularyLevelLabels[vocabularyLevel]}</Tag>
-              <Tag color="red">生词: 红色下划线</Tag>
-            </div>
-          </div>
           <div className={`${themeStyles.text} whitespace-pre-wrap`}>
             {renderClickableContent(fileContent)}
           </div>
@@ -1123,7 +1124,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
                 top: '20%',
                 left: '50%',
                 transform: 'translateX(-50%)',
-                minWidth: '300px',
+                minWidth: '320px',
               }}
               title={
                 <div className="flex items-center justify-between">
@@ -1141,6 +1142,27 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
               }
             >
               <div className="space-y-3">
+                {/* 翻译源切换 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">翻译源:</span>
+                  <Button 
+                    size="small" 
+                    type={sentenceTranslateSource === 'google' ? 'primary' : 'default'}
+                    onClick={() => switchSentenceTranslateSource('google')}
+                  >
+                    Google
+                  </Button>
+                  <Button 
+                    size="small" 
+                    type={sentenceTranslateSource === 'ai' ? 'primary' : 'default'}
+                    onClick={() => switchSentenceTranslateSource('ai')}
+                  >
+                    AI
+                  </Button>
+                </div>
+                
+                <Divider className="my-2" />
+                
                 {/* 原文 */}
                 <div>
                   <div className="text-xs text-gray-400 mb-1">原文</div>
@@ -1153,7 +1175,9 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
                 
                 {/* 译文 */}
                 <div>
-                  <div className="text-xs text-gray-400 mb-1">译文</div>
+                  <div className="text-xs text-gray-400 mb-1">
+                    译文 {sentenceTranslateSource === 'ai' && <Tag color="blue" className="text-xs">AI</Tag>}
+                  </div>
                   {sentenceTranslating ? (
                     <Spin size="small" tip="翻译中..." />
                   ) : (
