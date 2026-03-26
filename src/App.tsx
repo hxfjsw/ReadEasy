@@ -78,24 +78,27 @@ function App() {
     setCurrentPage('reader');
   };
 
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'reader':
-        return (
+  // 渲染页面，使用 display:none 隐藏非活动页面以保留状态
+  const renderPages = () => {
+    return (
+      <>
+        <div style={{ display: currentPage === 'bookshelf' ? 'block' : 'none', height: '100%' }}>
+          <BookshelfPage onOpenBook={handleOpenBookFromBookshelf} />
+        </div>
+        <div style={{ display: currentPage === 'reader' ? 'block' : 'none', height: '100%' }}>
           <ReaderPage 
             initialFilePath={pendingBookPath || undefined}
             onClearInitialFile={() => setPendingBookPath(null)}
           />
-        );
-      case 'bookshelf':
-        return <BookshelfPage onOpenBook={handleOpenBookFromBookshelf} />;
-      case 'wordbook':
-        return <WordBookPage />;
-      case 'settings':
-        return <SettingsPage />;
-      default:
-        return <BookshelfPage onOpenBook={handleOpenBookFromBookshelf} />;
-    }
+        </div>
+        <div style={{ display: currentPage === 'wordbook' ? 'block' : 'none', height: '100%' }}>
+          <WordBookPage />
+        </div>
+        <div style={{ display: currentPage === 'settings' ? 'block' : 'none', height: '100%' }}>
+          <SettingsPage />
+        </div>
+      </>
+    );
   };
 
   if (loading) {
@@ -125,7 +128,7 @@ function App() {
         />
       </Sider>
       <Content className="bg-gray-50 overflow-hidden">
-        {renderPage()}
+        {renderPages()}
       </Content>
     </Layout>
   );
