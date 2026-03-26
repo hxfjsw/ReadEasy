@@ -378,7 +378,9 @@ export class DatabaseService {
 
   // 阅读记录相关操作
   getReadingRecords(): schema.ReadingRecord[] {
-    return this.db.prepare('SELECT * FROM reading_records ORDER BY last_read_at DESC').all() as schema.ReadingRecord[];
+    const records = this.db.prepare('SELECT * FROM reading_records ORDER BY last_read_at DESC').all() as schema.ReadingRecord[];
+    console.log('[DB] getReadingRecords:', records.length, 'records');
+    return records;
   }
 
   getReadingRecord(filePath: string): schema.ReadingRecord | undefined {
@@ -386,19 +388,23 @@ export class DatabaseService {
   }
 
   addOrUpdateReadingRecord(data: schema.NewReadingRecord): void {
+    console.log('[DB] addOrUpdateReadingRecord:', data.filePath);
     const existing = this.getReadingRecord(data.filePath);
     
     if (existing) {
+      console.log('[DB] Updating existing record:', existing.id);
       this.db.prepare(`
         UPDATE reading_records 
         SET progress = ?, current_position = ?, bookmarks = ?, last_read_at = unixepoch()
         WHERE id = ?
       `).run(data.progress, data.currentPosition || null, data.bookmarks, existing.id);
     } else {
-      this.db.prepare(`
+      console.log('[DB] Inserting new record');
+      const result = this.db.prepare(`
         INSERT INTO reading_records (book_name, file_path, format, progress, current_position, bookmarks, last_read_at)
         VALUES (?, ?, ?, ?, ?, ?, unixepoch())
       `).run(data.bookName, data.filePath, data.format, data.progress, data.currentPosition || null, data.bookmarks);
+      console.log('[DB] Insert result:', result);
     }
   }
 

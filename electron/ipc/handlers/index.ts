@@ -215,7 +215,9 @@ export function registerIPCHandlers(
   // 数据库操作 - 阅读记录
   ipcMain.handle('db:getReadingRecords', async () => {
     console.log('[IPC] db:getReadingRecords called');
-    return dbService.getReadingRecords();
+    const records = dbService.getReadingRecords();
+    console.log('[IPC] db:getReadingRecords returned', records?.length, 'records');
+    return records;
   });
 
   ipcMain.handle('db:getReadingRecord', async (_, filePath: string) => {
@@ -224,7 +226,7 @@ export function registerIPCHandlers(
   });
 
   ipcMain.handle('db:addOrUpdateReadingRecord', async (_, data: any) => {
-    console.log('[IPC] db:addOrUpdateReadingRecord called');
+    console.log('[IPC] db:addOrUpdateReadingRecord called with:', data?.bookName, data?.filePath);
     
     // 参数校验
     if (!data || !data.filePath) {
@@ -234,6 +236,7 @@ export function registerIPCHandlers(
     
     try {
       dbService.addOrUpdateReadingRecord(data);
+      console.log('[IPC] db:addOrUpdateReadingRecord success');
       return true;
     } catch (error: any) {
       console.error('[IPC] db:addOrUpdateReadingRecord error:', error);
