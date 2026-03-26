@@ -277,10 +277,17 @@ export class DatabaseService {
   }
 
   addWordToBook(wordBookId: number, wordId: number, context?: string): void {
-    this.db.prepare(`
-      INSERT OR IGNORE INTO word_book_items (word_book_id, word_id, context)
-      VALUES (?, ?, ?)
-    `).run(wordBookId, wordId, context || null);
+    console.log('[DB] addWordToBook called:', { wordBookId, wordId, context });
+    try {
+      const result = this.db.prepare(`
+        INSERT OR IGNORE INTO word_book_items (word_book_id, word_id, context)
+        VALUES (?, ?, ?)
+      `).run(wordBookId, wordId, context || null);
+      console.log('[DB] addWordToBook result:', result);
+    } catch (error: any) {
+      console.error('[DB] addWordToBook error:', error);
+      throw error;
+    }
   }
 
   removeWordFromBook(wordBookId: number, wordId: number): void {
@@ -290,7 +297,8 @@ export class DatabaseService {
   }
 
   getWordsInBook(wordBookId: number): (schema.Word & { context?: string; addedAt: Date; reviewStage?: number; lastReviewedAt?: Date; reviewCount?: number })[] {
-    return this.db.prepare(`
+    console.log('[DB] getWordsInBook called, wordBookId:', wordBookId);
+    const result = this.db.prepare(`
       SELECT w.*, wbi.context, wbi.added_at as addedAt, 
              wbi.review_stage as reviewStage, wbi.last_reviewed_at as lastReviewedAt, 
              wbi.review_count as reviewCount
@@ -299,6 +307,8 @@ export class DatabaseService {
       WHERE wbi.word_book_id = ?
       ORDER BY wbi.added_at DESC
     `).all(wordBookId) as any[];
+    console.log('[DB] getWordsInBook result:', result?.length || 0, 'items');
+    return result;
   }
   
   // 更新单词复习状态

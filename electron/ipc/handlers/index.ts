@@ -166,9 +166,15 @@ export function registerIPCHandlers(
   });
 
   ipcMain.handle('db:addWordToBook', async (_, wordBookId: number, wordId: number, context?: string) => {
-    console.log('[IPC] db:addWordToBook called');
-    dbService.addWordToBook(wordBookId, wordId, context);
-    return true;
+    console.log('[IPC] db:addWordToBook called:', { wordBookId, wordId, context });
+    try {
+      dbService.addWordToBook(wordBookId, wordId, context);
+      console.log('[IPC] db:addWordToBook success');
+      return true;
+    } catch (error: any) {
+      console.error('[IPC] db:addWordToBook error:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('db:removeWordFromBook', async (_, wordBookId: number, wordId: number) => {
