@@ -332,6 +332,29 @@ export function registerIPCHandlers(
     }
   });
 
+  // 划句子翻译
+  ipcMain.handle('translate:sentence', async (_, params: { text: string; targetLang?: string }) => {
+    console.log('[IPC] translate:sentence called:', params.text?.substring(0, 50) + '...');
+    try {
+      const result = await googleTranslateService.translate({
+        text: params.text,
+        targetLang: params.targetLang || 'zh-CN',
+      });
+      console.log('[IPC] translate:sentence success');
+      return { 
+        success: true, 
+        data: {
+          originalText: params.text,
+          translatedText: result.translatedText,
+          detectedLanguage: result.detectedSourceLanguage,
+        }
+      };
+    } catch (error: any) {
+      console.error('[IPC] translate:sentence error:', error);
+      return { success: false, message: error.message || '翻译失败' };
+    }
+  });
+
   ipcMain.handle('google:testConnection', async () => {
     console.log('[IPC] google:testConnection called');
     return googleTranslateService.testConnection();

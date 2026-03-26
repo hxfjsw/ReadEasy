@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Button, message, Tag, Spin, Empty, Drawer, Slider, Select, Tooltip, Progress } from 'antd';
-import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined } from '@ant-design/icons';
+import { Button, message, Tag, Spin, Empty, Drawer, Slider, Select, Tooltip, Progress, Card, Divider } from 'antd';
+import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined, TranslationOutlined, CloseOutlined } from '@ant-design/icons';
 import WordPopup from '../components/WordPopup';
 import { useSettingsStore } from '../stores/settingsStore';
 import { VocabularyLevel, VocabularyLevelLabels } from '../types';
@@ -69,6 +69,13 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const [selectedWord, setSelectedWord] = useState<string>('');
   const [selectedContext, setSelectedContext] = useState<string>('');
   const [popupVisible, setPopupVisible] = useState(false);
+  
+  // 句子翻译状态
+  const [selectedSentence, setSelectedSentence] = useState<string>('');
+  const [translatedSentence, setTranslatedSentence] = useState<string>('');
+  const [sentencePopupVisible, setSentencePopupVisible] = useState(false);
+  const [sentenceTranslating, setSentenceTranslating] = useState(false);
+  const sentencePopupRef = useRef<HTMLDivElement>(null);
   
   // 已掌握单词列表（从用户设置中加载）
   const [knownWords, setKnownWords] = useState<Set<string>>(new Set());
@@ -384,6 +391,60 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
     setPopupVisible(true);
   }, []);
 
+  // 处理句子翻译
+  const handleSentenceTranslate = async (text: string) => {
+    if (!text || text.trim().length < 2) return;
+    
+    console.log('[ReaderPage] Translating sentence:', text.substring(0, 50) + '...');
+    setSelectedSentence(text);
+    setSentenceTranslating(true);
+    setSentencePopupVisible(true);
+    
+    try {
+      const result = await window.electron.ipcRenderer.invoke('translate:sentence', {
+        text: text.trim(),
+        targetLang: 'zh-CN',
+      });
+      
+      if (result.success) {
+        setTranslatedSentence(result.data.translatedText);
+      } else {
+        message.error(result.message || '翻译失败');
+        setTranslatedSentence('翻译失败');
+      }
+    } catch (error: any) {
+      console.error('[ReaderPage] Sentence translation error:', error);
+      message.error('翻译失败: ' + error.message);
+      setTranslatedSentence('翻译失败');
+    } finally {
+      setSentenceTranslating(false);
+    }
+  };
+
+  // 处理鼠标释放事件（检测选中文本）
+  const handleMouseUp = useCallback(() => {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim();
+    
+    // 如果选中了超过一个单词（包含空格或长度较长），则提供翻译
+    if (selectedText && selectedText.length > 1 && (
+      selectedText.includes(' ') || 
+      selectedText.length > 15
+    )) {
+      // 延迟一点执行，避免和单击冲突
+      setTimeout(() => {
+        handleSentenceTranslate(selectedText);
+      }, 200);
+    }
+  }, []);
+
+  // 关闭句子翻译弹窗
+  const closeSentencePopup = useCallback(() => {
+    setSentencePopupVisible(false);
+    setSelectedSentence('');
+    setTranslatedSentence('');
+  }, []);
+
   // 播放单词发音
   const playPronunciation = (word: string) => {
     if ('speechSynthesis' in window) {
@@ -645,13 +706,66 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       {/* Content Area */}
       <div 
         ref={contentRef}
-        className={`flex-1 overflow-auto ${themeStyles.bg}`}
+        className={`flex-1 overflow-auto ${themeStyles.bg} relative`}
         onScroll={handleScroll}
+        onMouseUp={handleMouseUp}
       >
         {loadingState.isLoading ? (
           renderLoading()
         ) : (
           renderContent()
+        )}
+        
+        {/* 句子翻译弹窗 */}
+        {sentencePopupVisible && (
+          <Card
+            ref={sentencePopupRef}
+            className="absolute z-50 shadow-lg max-w-md"
+            style={{
+              top: '20%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              minWidth: '300px',
+            }}
+            title={
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <TranslationOutlined />
+                  句子翻译
+                </span>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CloseOutlined />}
+                  onClick={closeSentencePopup}
+                />
+              </div>
+            }
+          >
+            <div className="space-y-3">
+              {/* 原文 */}
+              <div>
+                <div className="text-xs text-gray-400 mb-1">原文</div>
+                <div className="text-sm text-gray-800 leading-relaxed">
+                  {selectedSentence}
+                </div>
+              </div>
+              
+              <Divider className="my-2" />
+              
+              {/* 译文 */}
+              <div>
+                <div className="text-xs text-gray-400 mb-1">译文</div>
+                {sentenceTranslating ? (
+                  <Spin size="small" tip="翻译中..." />
+                ) : (
+                  <div className="text-sm text-blue-700 leading-relaxed">
+                    {translatedSentence}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
         )}
       </div>
 

@@ -48,6 +48,9 @@ export interface IPCChannels {
   'ai:analyzeVocabulary': (params: { text: string; configId?: number }) => Promise<any>;
   'ai:generateExample': (params: { word: string; level: string; configId?: number }) => Promise<any>;
   
+  // 翻译服务
+  'translate:sentence': (params: { text: string; targetLang?: string }) => Promise<any>;
+  
   // 窗口控制
   'window:minimize': () => void;
   'window:maximize': () => void;
