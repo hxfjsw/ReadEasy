@@ -221,6 +221,13 @@ export class DatabaseService {
   }
 
   addWord(data: schema.NewWord): number {
+    // 先检查单词是否已存在
+    const existing = this.getWord(data.word);
+    if (existing) {
+      console.log('[DB] Word already exists:', data.word, 'id:', existing.id);
+      return existing.id;
+    }
+    
     const result = this.db.prepare(`
       INSERT INTO words (word, phonetic_uk, phonetic_us, definition_cn, definition_en, level, frequency, source)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -234,6 +241,7 @@ export class DatabaseService {
       data.frequency || null,
       data.source || 'local'
     );
+    console.log('[DB] addWord success:', data.word, 'id:', result.lastInsertRowid);
     return Number(result.lastInsertRowid);
   }
 

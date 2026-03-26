@@ -8,7 +8,9 @@ import {
   Spin, 
   Tooltip,
   Tag,
-  Modal
+  Modal,
+  List,
+  Space
 } from 'antd';
 import { 
   DeleteOutlined, 
@@ -60,12 +62,25 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
           }
           return hasPath;
         })
-        .map((record: BookshelfItem): BookshelfItem => ({
-          ...record,
-          // 统一转换为驼峰格式（filter 已经确保有 path）
-          filePath: (record.filePath || record.file_path) as string,
-          lastReadAt: (record.lastReadAt || record.last_read_at) as Date,
-        }))
+        .map((record: BookshelfItem): BookshelfItem => {
+          // 处理日期：数据库返回的是 Unix 时间戳（秒），需要转换为毫秒
+          const rawDate = record.lastReadAt || record.last_read_at;
+          let parsedDate: Date;
+          if (typeof rawDate === 'number') {
+            parsedDate = rawDate < 1e10 ? new Date(rawDate * 1000) : new Date(rawDate);
+          } else if (typeof rawDate === 'string') {
+            parsedDate = new Date(rawDate);
+          } else {
+            parsedDate = new Date();
+          }
+          
+          return {
+            ...record,
+            // 统一转换为驼峰格式（filter 已经确保有 path）
+            filePath: (record.filePath || record.file_path) as string,
+            lastReadAt: parsedDate,
+          };
+        })
         .sort((a: BookshelfItem, b: BookshelfItem) => {
           return new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime();
         });
@@ -180,9 +195,21 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   };
 
   // 格式化时间
-  const formatTime = (date: Date) => {
+  // 数据库返回的是 Unix 时间戳（秒），需要转换为毫秒
+  const parseDate = (dateValue: any): Date => {
+    if (!dateValue) return new Date();
+    // 如果是数字（Unix 时间戳），转换为毫秒
+    if (typeof dateValue === 'number') {
+      // 判断是秒还是毫秒（Unix 时间戳秒级通常小于 1e10）
+      return dateValue < 1e10 ? new Date(dateValue * 1000) : new Date(dateValue);
+    }
+    return new Date(dateValue);
+  };
+
+  const formatTime = (date: Date | number | string) => {
+    const parsedDate = parseDate(date);
     const now = new Date();
-    const diff = now.getTime() - new Date(date).getTime();
+    const diff = now.getTime() - parsedDate.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     
     if (days === 0) {
@@ -197,7 +224,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     } else if (days < 7) {
       return `${days}天前`;
     } else {
-      return new Date(date).toLocaleDateString('zh-CN');
+      return parsedDate.toLocaleDateString('zh-CN');
     }
   };
 
@@ -258,90 +285,98 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
             </Button>
           </Empty>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {books.map((book) => (
-              <Card
-                key={book.id}
-                hoverable
-                className="book-card group relative overflow-hidden"
-                onClick={() => handleOpenBook(book)}
-                cover={
-                  <div className="h-32 bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-                    {getFileIcon(book.format)}
-                  </div>
-                }
-                actions={[
-                  <Tooltip title="阅读" key="read">
-                    <Button 
-                      type="text" 
-                      icon={<ReadOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenBook(book);
-                      }}
-                    >
-                      阅读
-                    </Button>
-                  </Tooltip>,
-                  <Tooltip title="详情" key="detail">
-                    <Button 
-                      type="text" 
-                      icon={<ClockCircleOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        showBookDetail(book);
-                      }}
-                    >
-                      详情
-                    </Button>
-                  </Tooltip>,
-                  <Popconfirm
-                    key="delete"
-                    title="确定从书架移除这本书吗？"
-                    description="此操作不会删除原文件"
-                    onConfirm={(e) => {
-                      e?.stopPropagation();
-                      handleDeleteBook(book.id);
-                    }}
-                    onCancel={(e) => e?.stopPropagation()}
-                    okText="移除"
-                    cancelText="取消"
-                  >
-                    <Button 
-                      type="text" 
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      移除
-                    </Button>
-                  </Popconfirm>,
-                ]}
-              >
-                <Card.Meta
-                  title={
-                    <Tooltip title={book.bookName}>
-                      <div className="truncate font-medium">{book.bookName}</div>
-                    </Tooltip>
-                  }
-                  description={
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1 text-gray-500 text-xs">
+          <List
+            grid={{ gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 3, xxl: 4 }}
+            dataSource={books}
+            renderItem={(book) => (
+              <List.Item>
+                <Card
+                  hoverable
+                  className="book-card group relative overflow-hidden"
+                  onClick={() => handleOpenBook(book)}
+                >
+                  <div className="flex gap-4">
+                    {/* 左侧：文件图标 */}
+                    <div className="flex-shrink-0">
+                      <div className="w-16 h-20 bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center rounded">
+                        {getFileIcon(book.format)}
+                      </div>
+                    </div>
+                    
+                    {/* 右侧：书籍信息 */}
+                    <div className="flex-1 min-w-0">
+                      {/* 书名 */}
+                      <Tooltip title={book.bookName}>
+                        <h3 className="font-bold text-gray-800 truncate mb-1">
+                          {book.bookName}
+                        </h3>
+                      </Tooltip>
+                      
+                      {/* 文件路径 */}
+                      <p className="text-gray-400 text-xs truncate mb-2" title={book.filePath}>
+                        {book.filePath}
+                      </p>
+                      
+                      {/* 元信息 */}
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                         <ClockCircleOutlined />
                         <span>{formatTime(book.lastReadAt)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
                         <Tag>{book.format.toUpperCase()}</Tag>
                         {book.progress > 0 && (
                           <Tag color="green">{book.progress}%</Tag>
                         )}
                       </div>
+                      
+                      {/* 操作按钮 */}
+                      <Space size="small">
+                        <Button 
+                          type="primary" 
+                          size="small"
+                          icon={<ReadOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenBook(book);
+                          }}
+                        >
+                          阅读
+                        </Button>
+                        <Button 
+                          size="small"
+                          icon={<ClockCircleOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            showBookDetail(book);
+                          }}
+                        >
+                          详情
+                        </Button>
+                        <Popconfirm
+                          title="确定从书架移除这本书吗？"
+                          description="此操作不会删除原文件"
+                          onConfirm={(e) => {
+                            e?.stopPropagation();
+                            handleDeleteBook(book.id);
+                          }}
+                          onCancel={(e) => e?.stopPropagation()}
+                          okText="移除"
+                          cancelText="取消"
+                        >
+                          <Button 
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            移除
+                          </Button>
+                        </Popconfirm>
+                      </Space>
                     </div>
-                  }
-                />
-              </Card>
-            ))}
-          </div>
+                  </div>
+                </Card>
+              </List.Item>
+            )}
+          />
         )}
       </div>
 
@@ -394,7 +429,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
               <div className="flex justify-between">
                 <span className="text-gray-500">最后阅读:</span>
                 <span className="text-gray-700">
-                  {new Date(selectedBook.lastReadAt).toLocaleString('zh-CN')}
+                  {formatTime(selectedBook.lastReadAt)}
                 </span>
               </div>
             </div>
