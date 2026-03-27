@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, List, Card, Empty, Input, message, Popconfirm, Tag, Statistic, Row, Col, Upload } from 'antd';
+import { Button, List, Card, Empty, Input, message, Popconfirm, Tag, Upload } from 'antd';
 import { DeleteOutlined, SearchOutlined, CheckCircleOutlined, PlusOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 
 
@@ -231,37 +231,6 @@ const MasteredWordsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* 统计信息 */}
-      <Row gutter={16} className="mb-6">
-        <Col span={8}>
-          <Card>
-            <Statistic
-              title="熟词总数"
-              value={masteredWords.length}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card>
-            <Statistic
-              title="搜索结果"
-              value={filteredWords.length}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card>
-            <Statistic
-              title="说明"
-              value="阅读器中不再标记为生词"
-              valueStyle={{ fontSize: 14, color: '#666' }}
-            />
-          </Card>
-        </Col>
-      </Row>
-
       {/* 单词列表 */}
       <Card className="flex-1 overflow-hidden">
         {filteredWords.length === 0 ? (
@@ -300,7 +269,6 @@ const MasteredWordsPage: React.FC = () => {
               >
                 <List.Item.Meta
                   title={<span className="text-lg font-medium">{word}</span>}
-                  description="已掌握，阅读时不会标记为生词"
                 />
               </List.Item>
             )}

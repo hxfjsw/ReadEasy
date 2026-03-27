@@ -1,4 +1,4 @@
-
+import React from 'react';
 import { Spin, Empty, Progress, Button, Tooltip } from 'antd';
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { LoadingState } from '../../../types/reader';
@@ -95,14 +95,28 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
   );
 };
 
-const RenderContent: React.FC<{
+const levelOrder = ['elementary', 'middle', 'high', 'cet4', 'cet6', 'postgraduate', 'ielts', 'toefl', 'gre', 'tem8'];
+const levelColors: Record<string, string> = {
+  elementary: '#52c41a', middle: '#13c2c2', high: '#1890ff', cet4: '#2f54eb',
+  cet6: '#722ed1', postgraduate: '#eb2f96', ielts: '#fa8c16', toefl: '#faad14',
+  gre: '#f5222d', tem8: '#cf1322',
+};
+
+interface RenderContentProps {
   text: string;
   vocabularyLevel: string;
   knownWords: Set<string>;
   vocabularyAnalysis: Map<string, string>;
   onWordClick: (word: string, context: string) => void;
-}> = ({ text, vocabularyLevel, knownWords, vocabularyAnalysis, onWordClick }) => {
-  const levelOrder = ['elementary', 'middle', 'high', 'cet4', 'cet6', 'postgraduate', 'ielts', 'toefl', 'gre', 'tem8'];
+}
+
+const RenderContent: React.FC<RenderContentProps> = React.memo(({ 
+  text, 
+  vocabularyLevel, 
+  knownWords, 
+  vocabularyAnalysis, 
+  onWordClick 
+}) => {
   const parts = text.split(/(\s+|[.,!?;:"()[\]{}])/);
   
   return parts.map((part, index) => {
@@ -118,13 +132,7 @@ const RenderContent: React.FC<{
     const userLevelIndex = levelOrder.indexOf(vocabularyLevel);
     const wordLevelIndex = wordLevel ? levelOrder.indexOf(wordLevel) : -1;
     const isUnknown = !isKnown && wordLevel && wordLevelIndex > userLevelIndex;
-    
-    const colors: Record<string, string> = {
-      elementary: '#52c41a', middle: '#13c2c2', high: '#1890ff', cet4: '#2f54eb',
-      cet6: '#722ed1', postgraduate: '#eb2f96', ielts: '#fa8c16', toefl: '#faad14',
-      gre: '#f5222d', tem8: '#cf1322',
-    };
-    const levelColor = wordLevel ? colors[wordLevel] : '';
+    const levelColor = wordLevel ? levelColors[wordLevel] : '';
     
     return (
       <Tooltip key={index} title={part}>
@@ -138,4 +146,4 @@ const RenderContent: React.FC<{
       </Tooltip>
     );
   });
-};
+});

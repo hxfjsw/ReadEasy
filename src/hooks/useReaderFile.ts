@@ -84,19 +84,43 @@ export function useReaderFile() {
       setChapterStartPages(startPages);
       setPageContents(pages);
       setTotalPages(pages.length);
-      setCurrentPage(0);
-      setCurrentChapter(0);
-      setFileContent(pages[0] || '');
+      
+      // 查询上次阅读进度
+      let savedPage = 0;
+      try {
+        const records = await window.electron.ipcRenderer.invoke('db:getReadingRecords');
+        const record = records?.find((r: any) => (r.filePath || r.file_path) === path);
+        if (record?.currentPosition) {
+          const pageNum = parseInt(record.currentPosition, 10);
+          if (!isNaN(pageNum) && pageNum >= 0 && pageNum < pages.length) {
+            savedPage = pageNum;
+          }
+        }
+      } catch (e) {
+        console.error('获取阅读进度失败:', e);
+      }
+      
+      setCurrentPage(savedPage);
+      setFileContent(pages[savedPage] || '');
+      
+      // 设置当前章节
+      for (let i = chapterStartPages.length - 1; i >= 0; i--) {
+        if (savedPage >= startPages[i]) {
+          setCurrentChapter(i);
+          break;
+        }
+      }
       
       setLoadingState({ isLoading: false, stage: 'complete', progress: 100, message: '加载完成' });
       message.success(`文件加载成功，共 ${pages.length} 页`);
       
+      // 更新阅读记录（保留原有进度）
       await window.electron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
         bookName: result.metadata?.title || fileNameFromPath,
         filePath: path,
         format: path.split('.').pop() || '',
-        progress: 0,
-        currentPosition: '0',
+        progress: Math.round((savedPage / pages.length) * 100),
+        currentPosition: savedPage.toString(),
         bookmarks: '[]',
         lastReadAt: new Date().toISOString(),
       });

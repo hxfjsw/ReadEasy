@@ -117,26 +117,37 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         onThemeToggle={() => settings.updateTheme(settings.theme === 'dark' ? 'light' : 'dark')}
       />
 
-      <ContentArea
-        loadingState={file.loadingState}
-        fileContent={file.fileContent}
+      <div className="flex flex-1 overflow-hidden">
+        <ContentArea
+          loadingState={file.loadingState}
+          fileContent={file.fileContent}
 
-        themeStyles={themeStyles}
-        fontSize={settings.fontSize}
-        lineHeight={settings.lineHeight}
-        currentPage={file.currentPage}
-        totalPages={file.totalPages}
-        contentRef={contentRef}
-        vocabularyLevel={vocabularyLevel}
-        knownWords={vocab.knownWords}
-        vocabularyAnalysis={vocab.vocabularyAnalysis}
-        theme={settings.theme}
-        onMouseUp={handleMouseUp}
-        onFileSelect={file.handleFileSelect}
-        goToPreviousPage={file.goToPreviousPage}
-        goToNextPage={file.goToNextPage}
-        onWordClick={handleWordClick}
-      />
+          themeStyles={themeStyles}
+          fontSize={settings.fontSize}
+          lineHeight={settings.lineHeight}
+          currentPage={file.currentPage}
+          totalPages={file.totalPages}
+          contentRef={contentRef}
+          vocabularyLevel={vocabularyLevel}
+          knownWords={vocab.knownWords}
+          vocabularyAnalysis={vocab.vocabularyAnalysis}
+          theme={settings.theme}
+          onMouseUp={handleMouseUp}
+          onFileSelect={file.handleFileSelect}
+          goToPreviousPage={file.goToPreviousPage}
+          goToNextPage={file.goToNextPage}
+          onWordClick={handleWordClick}
+        />
+
+        <WordPopupSidebar
+          word={selectedWord}
+          context={selectedContext}
+          visible={popupVisible}
+          bookName={file.fileName}
+          onClose={() => setPopupVisible(false)}
+          onMasteredStatusChange={vocab.updateKnownWords}
+        />
+      </div>
 
       {sentencePopupVisible && (
         <SentencePopup
@@ -152,15 +163,6 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           }}
         />
       )}
-
-      <WordPopupSidebar
-        word={selectedWord}
-        context={selectedContext}
-        visible={popupVisible}
-        bookName={file.fileName}
-        onClose={() => setPopupVisible(false)}
-        onMasteredStatusChange={vocab.updateKnownWords}
-      />
 
       <ChapterDrawer
         open={chapterDrawerOpen}
