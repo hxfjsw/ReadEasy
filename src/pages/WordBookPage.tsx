@@ -81,6 +81,17 @@ const WordBookPage: React.FC = () => {
     }
   };
 
+  // 删除整本单词本
+  const handleDeleteWordBook = async (bookId: number, bookName: string) => {
+    try {
+      await window.electron.ipcRenderer.invoke('db:deleteWordBook', bookId);
+      message.success(`单词本 "${bookName}" 已删除`);
+      loadWordBooks();
+    } catch (error) {
+      message.error('删除单词本失败');
+    }
+  };
+
   // 标记为熟词
   const handleMarkAsMastered = async (word: string) => {
     try {
@@ -279,17 +290,40 @@ const WordBookPage: React.FC = () => {
             wordBooks.map((book) => (
               <div
                 key={book.id}
-                onClick={() => setSelectedBookId(book.id)}
-                className={`p-4 cursor-pointer border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                className={`p-4 cursor-pointer border-b border-gray-100 hover:bg-gray-50 transition-colors group ${
                   selectedBookId === book.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  <BookOutlined className="text-blue-500" />
-                  <span className="font-medium text-gray-800">{book.name}</span>
+                <div className="flex items-center justify-between" onClick={() => setSelectedBookId(book.id)}>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <BookOutlined className="text-blue-500" />
+                    <span className="font-medium text-gray-800 truncate">{book.name}</span>
+                  </div>
+                  <Popconfirm
+                    title="删除单词本"
+                    description={`确定要删除单词本 "${book.name}" 吗？其中的所有单词也将被移除。`}
+                    onConfirm={(e) => {
+                      e?.stopPropagation();
+                      handleDeleteWordBook(book.id, book.name);
+                    }}
+                    onCancel={(e) => e?.stopPropagation()}
+                    okText="删除"
+                    cancelText="取消"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                      title="删除单词本"
+                    />
+                  </Popconfirm>
                 </div>
                 {book.description && (
-                  <p className="text-sm text-gray-500 mt-1 truncate">{book.description}</p>
+                  <p className="text-sm text-gray-500 mt-1 truncate" onClick={() => setSelectedBookId(book.id)}>{book.description}</p>
                 )}
               </div>
             ))
