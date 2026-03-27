@@ -53,28 +53,6 @@ npm run electron:dev
 └── package.json          # 项目配置
 ```
 
-## 常见问题
-
-### 1. 音频分片时长设置
-
-- 位置: `src/hooks/useReaderSettings.ts`
-- 默认: 5 秒
-- 范围: 1-15 秒
-
-### 2. 相似度阈值设置
-
-- 位置: `src/hooks/useReaderSettings.ts`
-- 默认: 0.5 (50%)
-- 范围: 0.05-1 (5%-100%)
-
-### 3. 相似度计算逻辑
-
-支持子串匹配：
-```typescript
-// 子串占长串的比例，最低0.5，最高1
-return 0.5 + (shorter.length / longer.length) * 0.5;
-```
-
 ## Git 提交规范
 
 - `feat:` 新功能
