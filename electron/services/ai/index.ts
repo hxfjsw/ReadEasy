@@ -416,12 +416,12 @@ IMPORTANT - Context Analysis:
 The word appears in this context: "${context}"
 
 You MUST provide:
-1. contextAnalysis: Explain what this word means SPECIFICALLY in this context, and why it's used here. Analyze the context in detail.
+1. contextAnalysis: Explain what this word means SPECIFICALLY in this context IN CHINESE (中文), and why it's used here. Analyze the context in detail. Your explanation MUST be in Chinese.
 2. contextTranslation: Provide a natural Chinese translation of the entire context sentence/paragraph.
 ` : '';
 
     const contextFields = context ? `,
-  "contextAnalysis": "Detailed analysis of what the word means in this specific context, including cultural references, implied meanings, etc.",
+  "contextAnalysis": "用中文详细解释这个单词在此特定上下文中的含义、用法和文化内涵等",
   "contextTranslation": "Natural Chinese translation of the entire context"` : '';
 
     return `Please provide a detailed definition for the word "${word}".${contextSection}
@@ -491,12 +491,12 @@ IMPORTANT - Context Analysis:
 The word appears in this context: "${context}"
 
 You MUST provide:
-1. contextAnalysis: Explain what this word means SPECIFICALLY in this context, and why it's used here.
+1. contextAnalysis: Explain what this word means SPECIFICALLY in this context IN CHINESE (中文), and why it's used here. Your explanation MUST be in Chinese.
 2. contextTranslation: Provide a natural Chinese translation of the entire context sentence/paragraph.
 ` : '';
 
     const contextFields = context ? `,
-  "contextAnalysis": "Detailed analysis of what the word means in this specific context",
+  "contextAnalysis": "用中文详细解释这个单词在此特定上下文中的含义和用法",
   "contextTranslation": "Natural Chinese translation of the entire context"` : '';
 
     return `Please provide detailed etymology and root analysis for the word "${word}".${contextSection}
