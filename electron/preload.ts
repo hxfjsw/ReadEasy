@@ -50,6 +50,8 @@ export interface IPCChannels {
   // AI服务
   'ai:testConnection': (config: any) => Promise<{ success: boolean; message: string }>;
   'ai:defineWord': (params: { word: string; context?: string; configId?: number }) => Promise<any>;
+  'ai:defineWordBasic': (params: { word: string; configId?: number }) => Promise<any>;
+  'ai:defineWordDetailed': (params: { word: string; context?: string; configId?: number }) => Promise<any>;
   'ai:translate': (params: { text: string; configId?: number }) => Promise<any>;
   'ai:analyzeVocabulary': (params: { text: string; configId?: number }) => Promise<any>;
   'ai:generateExample': (params: { word: string; level: string; configId?: number }) => Promise<any>;

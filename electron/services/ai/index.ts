@@ -142,7 +142,7 @@ export class AIService {
     }
   }
 
-  // 获取单词释义
+  // 获取单词释义（完整版）
   async getWordDefinition(word: string, context?: string, configId?: number): Promise<WordDefinition> {
     const { client, config } = await this.getClient(configId);
     
@@ -184,6 +184,88 @@ export class AIService {
     } catch (error: any) {
       console.error('Failed to get word definition:', error);
       throw new Error(`Failed to get definition: ${error.message}`);
+    }
+  }
+
+  // 获取单词基础释义（分步查询第一步，快速返回）
+  async getWordDefinitionBasic(word: string, configId?: number): Promise<Partial<WordDefinition>> {
+    const { client, config } = await this.getClient(configId);
+    
+    const prompt = this.buildBasicDefinitionPrompt(word);
+    
+    try {
+      const supportsJsonObject = config.provider !== 'lmstudio' && config.provider !== 'custom';
+      
+      const requestOptions: any = {
+        model: config.model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: config.temperature,
+        max_tokens: 1000, // 基础释义不需要太多token
+      };
+      
+      if (supportsJsonObject) {
+        requestOptions.response_format = { type: 'json_object' };
+      }
+
+      const response = await client.chat.completions.create(requestOptions);
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response from AI');
+      }
+
+      let result: any;
+      if (supportsJsonObject) {
+        result = JSON.parse(content);
+      } else {
+        result = this.extractJsonFromText(content);
+      }
+      
+      return this.normalizeBasicDefinition(result);
+    } catch (error: any) {
+      console.error('Failed to get basic word definition:', error);
+      throw new Error(`Failed to get basic definition: ${error.message}`);
+    }
+  }
+
+  // 获取单词详细释义（分步查询第二步，包括词源、词根、上下文分析）
+  async getWordDefinitionDetailed(word: string, context?: string, configId?: number): Promise<Partial<WordDefinition>> {
+    const { client, config } = await this.getClient(configId);
+    
+    const prompt = this.buildDetailedDefinitionPrompt(word, context);
+    
+    try {
+      const supportsJsonObject = config.provider !== 'lmstudio' && config.provider !== 'custom';
+      
+      const requestOptions: any = {
+        model: config.model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: config.temperature,
+        max_tokens: config.maxTokens,
+      };
+      
+      if (supportsJsonObject) {
+        requestOptions.response_format = { type: 'json_object' };
+      }
+
+      const response = await client.chat.completions.create(requestOptions);
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response from AI');
+      }
+
+      let result: any;
+      if (supportsJsonObject) {
+        result = JSON.parse(content);
+      } else {
+        result = this.extractJsonFromText(content);
+      }
+      
+      return this.normalizeDetailedDefinition(result);
+    } catch (error: any) {
+      console.error('Failed to get detailed word definition:', error);
+      throw new Error(`Failed to get detailed definition: ${error.message}`);
     }
   }
 
@@ -376,6 +458,114 @@ IMPORTANT: Return ONLY a valid JSON object in the following format, without any 
     {"word": "related word 1", "meaning": "brief meaning", "relation": "shares same root/prefix/etc"}
   ]${contextFields}
 }`;
+  }
+
+  // 构建基础单词释义提示词（分步查询第一步）
+  private buildBasicDefinitionPrompt(word: string): string {
+    return `Please provide the basic definition for the word "${word}".
+
+IMPORTANT: Return ONLY a valid JSON object in the following format, without any markdown formatting or extra text:
+{
+  "word": "${word}",
+  "phoneticUk": "British phonetic symbol",
+  "phoneticUs": "American phonetic symbol",
+  "definitions": [
+    {
+      "pos": "part of speech (n., v., adj., adv., etc.)",
+      "meaningCn": "Chinese meaning",
+      "meaningEn": "English meaning",
+      "examples": ["Example sentence 1", "Example sentence 2"]
+    }
+  ],
+  "level": "vocabulary level (elementary, middle, high, cet4, cet6, postgraduate, ielts, toefl, gre, tem8)",
+  "synonyms": ["synonym1", "synonym2"],
+  "antonyms": ["antonym1", "antonym2"]
+}`;
+  }
+
+  // 构建详细单词释义提示词（分步查询第二步）
+  private buildDetailedDefinitionPrompt(word: string, context?: string): string {
+    const contextSection = context ? `
+
+IMPORTANT - Context Analysis:
+The word appears in this context: "${context}"
+
+You MUST provide:
+1. contextAnalysis: Explain what this word means SPECIFICALLY in this context, and why it's used here.
+2. contextTranslation: Provide a natural Chinese translation of the entire context sentence/paragraph.
+` : '';
+
+    const contextFields = context ? `,
+  "contextAnalysis": "Detailed analysis of what the word means in this specific context",
+  "contextTranslation": "Natural Chinese translation of the entire context"` : '';
+
+    return `Please provide detailed etymology and root analysis for the word "${word}".${contextSection}
+
+You MUST provide:
+1. etymology: The origin and history of the word
+2. rootAnalysis: Break down the word into its root(s), prefix, and suffix with explanations
+3. relatedWords: List 3-5 words that share the same root or are etymologically related
+
+IMPORTANT: Return ONLY a valid JSON object in the following format, without any markdown formatting or extra text:
+{
+  "etymology": "Origin and history of the word (e.g., from Latin/Greek/French...)",
+  "rootAnalysis": {
+    "prefix": {"value": "prefix part", "meaning": "meaning of prefix"},
+    "root": {"value": "root part", "meaning": "meaning of root", "origin": "Latin/Greek/etc"},
+    "suffix": {"value": "suffix part", "meaning": "meaning of suffix"},
+    "explanation": "How the parts combine to form the word meaning"
+  },
+  "relatedWords": [
+    {"word": "related word 1", "meaning": "brief meaning", "relation": "shares same root/prefix/etc"}
+  ]${contextFields}
+}`;
+  }
+
+  // 规范化基础单词释义结果
+  private normalizeBasicDefinition(result: any): Partial<WordDefinition> {
+    return {
+      word: result.word || '',
+      phoneticUk: result.phonetic_uk || result.phoneticUk,
+      phoneticUs: result.phonetic_us || result.phoneticUs,
+      definitions: Array.isArray(result.definitions) ? result.definitions.map((def: any) => ({
+        pos: def.pos || '',
+        meaningCn: def.meaning_cn || def.meaningCn || '',
+        meaningEn: def.meaning_en || def.meaningEn || '',
+        examples: Array.isArray(def.examples) ? def.examples : [],
+      })) : [],
+      level: result.level,
+      synonyms: Array.isArray(result.synonyms) ? result.synonyms : [],
+      antonyms: Array.isArray(result.antonyms) ? result.antonyms : [],
+    };
+  }
+
+  // 规范化详细单词释义结果
+  private normalizeDetailedDefinition(result: any): Partial<WordDefinition> {
+    let rootAnalysis = result.root_analysis || result.rootAnalysis;
+    if (typeof rootAnalysis === 'string' && rootAnalysis) {
+      try {
+        rootAnalysis = JSON.parse(rootAnalysis);
+      } catch {
+        rootAnalysis = undefined;
+      }
+    }
+
+    let relatedWords = result.related_words || result.relatedWords;
+    if (typeof relatedWords === 'string' && relatedWords) {
+      try {
+        relatedWords = JSON.parse(relatedWords);
+      } catch {
+        relatedWords = undefined;
+      }
+    }
+
+    return {
+      etymology: result.etymology,
+      rootAnalysis,
+      relatedWords: Array.isArray(relatedWords) ? relatedWords : [],
+      contextAnalysis: result.context_analysis || result.contextAnalysis,
+      contextTranslation: result.context_translation || result.contextTranslation,
+    };
   }
 
   // 构建词汇分析提示词

@@ -337,6 +337,41 @@ export function registerIPCHandlers(
     }
   });
 
+  // 分步查询：基础定义（快速返回）
+  ipcMain.handle('ai:defineWordBasic', async (_, params: { word: string; configId?: number }) => {
+    console.log('[IPC] ai:defineWordBasic called:', params.word);
+    try {
+      const result = await aiService.getWordDefinitionBasic(params.word, params.configId);
+      return { success: true, data: result };
+    } catch (error: any) {
+      console.error('[IPC] ai:defineWordBasic error:', error);
+      // AI 未配置时，自动降级到 Google 翻译
+      if (error.message?.includes('API key is not configured')) {
+        console.log('[IPC] ai:defineWordBasic falling back to Google Translate');
+        try {
+          const googleResult = await googleTranslateService.getWordDefinition(params.word);
+          return { success: true, data: googleResult };
+        } catch (googleError: any) {
+          console.error('[IPC] Google fallback error:', googleError);
+          return { success: false, message: googleError.message || '获取单词释义失败' };
+        }
+      }
+      return { success: false, message: error.message || '获取单词释义失败' };
+    }
+  });
+
+  // 分步查询：详细定义（词源、词根、上下文分析）
+  ipcMain.handle('ai:defineWordDetailed', async (_, params: { word: string; context?: string; configId?: number }) => {
+    console.log('[IPC] ai:defineWordDetailed called:', params.word);
+    try {
+      const result = await aiService.getWordDefinitionDetailed(params.word, params.context, params.configId);
+      return { success: true, data: result };
+    } catch (error: any) {
+      console.error('[IPC] ai:defineWordDetailed error:', error);
+      return { success: false, message: error.message || '获取单词详细释义失败' };
+    }
+  });
+
   // Google 免费翻译服务（默认）
   ipcMain.handle('google:translate', async (_, params: { text: string; targetLang?: string }) => {
     console.log('[IPC] google:translate called');

@@ -367,62 +367,105 @@ export class ParserService {
     let title: string | null = null;
     const headerSlice = html.slice(0, 20000);
     
-    // 首先尝试提取所有可能的标题，按优先级排序
-    const candidates: Array<{ text: string; priority: number }> = [];
-    
-    // 匹配各种标题标签（包括带属性的标签）
-    // 使用[\s\S]*?来匹配可能包含换行的内容，然后清理HTML标签
-    const headingPatterns = [
-      { tag: 'h1', priority: 10 },
-      { tag: 'h2', priority: 20 },
-      { tag: 'h3', priority: 30 },
-      { tag: 'h4', priority: 40 },
-      { tag: 'h5', priority: 50 },
-      { tag: 'h6', priority: 60 },
-      { tag: 'title', priority: 70 },
-    ];
-    
-    for (const { tag, priority } of headingPatterns) {
-      // 匹配整个标签内容（包括嵌套标签）
-      const pattern = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
-      let match;
-      while ((match = pattern.exec(headerSlice)) !== null) {
-        // 清理内部HTML标签，保留文本
-        let text = match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-        if (text && text.length > 0 && text.length < 200) {
-          candidates.push({ text, priority });
-        }
-      }
-    }
-    
-    // 尝试从 <p> 标签中提取 Chapter X 标题（某些EPUB用<p>标签作为章节标题）
+    // 策略1: 优先从 <p> 标签中提取 Chapter X 和其后的子标题
+    // 查找所有 <p> 标签，尝试找到章节号和章节名的组合
     const pPattern = /<p[^>]*>([\s\S]*?)<\/p>/gi;
     let pMatch;
+    let chapterNumber: string | null = null;
+    let chapterSubtitle: string | null = null;
+    let pCount = 0;
+    
     while ((pMatch = pPattern.exec(headerSlice)) !== null) {
-      let text = pMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      // 只保留匹配 Chapter X 格式的 <p> 标签
-      if (/^(chapter|section|part)\s*\d+/i.test(text) && text.length < 200) {
-        candidates.push({ text, priority: 15 }); // 优先级介于 h1 和 h2 之间
+      pCount++;
+      const rawText = pMatch[1];
+      // 保留HTML标签以便检测粗体
+      const textWithTags = rawText.trim();
+      // 清理后的文本
+      const cleanText = textWithTags.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // 跳过空段落或图片段落
+      if (!cleanText || cleanText.length === 0 || rawText.includes('<img')) {
+        continue;
+      }
+      
+      // 匹配 Chapter X 格式 (如 "Chapter 1", "CHAPTER ONE")
+      const chapterMatch = cleanText.match(/^(chapter\s+\d+[\s\S]*)/i);
+      if (chapterMatch && !chapterNumber) {
+        // 检查是否包含副标题（同一<p>标签内）
+        const parts = cleanText.split(/\n|\s{2,}/);
+        if (parts.length > 1 && parts[0].match(/^chapter\s+\d+$/i)) {
+          chapterNumber = parts[0].trim();
+          // 剩余部分作为副标题
+          chapterSubtitle = parts.slice(1).join(' ').trim();
+        } else {
+          chapterNumber = cleanText;
+        }
+        continue;
+      }
+      
+      // 如果已找到 Chapter X，下一个非空<p>标签可能是副标题
+      if (chapterNumber && !chapterSubtitle && cleanText.length < 200) {
+        // 检查是否包含粗体标签（通常是章节副标题）
+        const hasBold = /<b\b|<strong\b|class="[^"]*bold/i.test(textWithTags);
+        // 或者是简短的标题样式文本
+        const isShortTitle = cleanText.length < 100 && !cleanText.match(/^[a-z]/);
+        
+        if (hasBold || isShortTitle) {
+          chapterSubtitle = cleanText;
+          break; // 找到副标题，停止搜索
+        }
+      }
+      
+      // 如果已经处理了几个段落还没找到，停止搜索
+      if (pCount > 10) break;
+    }
+    
+    // 组合标题
+    if (chapterNumber) {
+      if (chapterSubtitle) {
+        title = `${chapterNumber} ${chapterSubtitle}`;
+      } else {
+        title = chapterNumber;
       }
     }
     
-    // 从候选标题中提取 Chapter X 模式
-    const genericPatterns = /(chapter|section|part)\s*\d+[^\n]*/i;
-    for (const candidate of candidates) {
-      // 尝试从标题中提取 Chapter X 部分（例如从 "Roald Dahl Chapter 1 The Three Farmers" 提取 "Chapter 1 The Three Farmers"）
-      const match = candidate.text.match(genericPatterns);
-      if (match) {
-        // 提取匹配到的 Chapter X 及其后面的内容
-        const chapterIndex = candidate.text.toLowerCase().indexOf(match[0].toLowerCase());
-        title = candidate.text.slice(chapterIndex).trim();
-        break;
+    // 策略2: 如果没有从<p>标签找到，尝试从 h1-h6 标题标签提取
+    if (!title) {
+      const headingPatterns = [
+        { tag: 'h1', priority: 10 },
+        { tag: 'h2', priority: 20 },
+        { tag: 'h3', priority: 30 },
+      ];
+      
+      const candidates: Array<{ text: string; priority: number }> = [];
+      
+      for (const { tag, priority } of headingPatterns) {
+        const pattern = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
+        let match;
+        while ((match = pattern.exec(headerSlice)) !== null) {
+          let text = match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          if (text && text.length > 0 && text.length < 200) {
+            candidates.push({ text, priority });
+          }
+        }
       }
-    }
-    
-    // 如果没有找到 Chapter X 模式，使用优先级最高的候选
-    if (!title && candidates.length > 0) {
-      candidates.sort((a, b) => a.priority - b.priority);
-      title = candidates[0].text;
+      
+      // 从候选标题中提取 Chapter X 模式
+      const genericPatterns = /(chapter|section|part)\s*\d+[^\n]*/i;
+      for (const candidate of candidates) {
+        const match = candidate.text.match(genericPatterns);
+        if (match) {
+          const chapterIndex = candidate.text.toLowerCase().indexOf(match[0].toLowerCase());
+          title = candidate.text.slice(chapterIndex).trim();
+          break;
+        }
+      }
+      
+      // 如果没有找到 Chapter X 模式，使用优先级最高的候选
+      if (!title && candidates.length > 0) {
+        candidates.sort((a, b) => a.priority - b.priority);
+        title = candidates[0].text;
+      }
     }
     
     // 检测是否主要是图片内容（Cover页面或图片章节）
@@ -451,31 +494,99 @@ export class ParserService {
       text = text.trim() + '\n\n[封面图片]';
     }
     
+    // 从内容中移除标题行（避免重复显示）
+    if (title) {
+      text = this.removeTitleFromContent(text, title);
+    }
+    
+    // 同时移除 <title> 标签的内容（通常是作者名或书名）
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    if (titleMatch) {
+      const titleText = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+      if (titleText && titleText !== title) {
+        text = this.removeTitleFromContent(text, titleText);
+      }
+    }
+    
     return { title, content: text.trim() };
   }
   
   /**
-   * 清理 HTML 片段，并将每句话单独分段
+   * 从内容中移除标题行
+   */
+  private removeTitleFromContent(content: string, title: string): string {
+    const lines = content.split('\n');
+    const filteredLines: string[] = [];
+    const titleLower = title.toLowerCase();
+    const titleParts = titleLower.split(/\s+/).filter(p => p.length > 2);
+    
+    for (const line of lines) {
+      const lineTrimmed = line.trim();
+      const lineLower = lineTrimmed.toLowerCase();
+      
+      // 跳过空行
+      if (!lineTrimmed) {
+        filteredLines.push(line);
+        continue;
+      }
+      
+      // 跳过完全匹配标题的行
+      if (lineLower === titleLower) {
+        continue;
+      }
+      
+      // 跳过标题的部分（如单独的 "Chapter 1" 或 "The Three Farmers"）
+      let isTitlePart = false;
+      for (const part of titleParts) {
+        if (lineLower === part || lineLower === `chapter ${part}`) {
+          isTitlePart = true;
+          break;
+        }
+      }
+      
+      // 特殊处理：跳过单独的 Chapter X 行（如果标题包含 Chapter X）
+      if (/^chapter\s+\d+$/i.test(lineTrimmed) && titleLower.includes(lineLower)) {
+        continue;
+      }
+      
+      // 如果这一行是标题的子字符串（如标题是 "Chapter 1 The Three Farmers"，行是 "The Three Farmers"）
+      if (titleLower.includes(lineLower) && lineTrimmed.length > 3) {
+        continue;
+      }
+      
+      if (!isTitlePart) {
+        filteredLines.push(line);
+      }
+    }
+    
+    return filteredLines.join('\n').trim();
+  }
+  
+  /**
+   * 清理 HTML 片段，保留段落结构
    */
   private cleanHtmlChunk(html: string): string {
     let text = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      // 将块级标签转换为换行符，保留段落结构
+      .replace(/<\/(p|div|h[1-6]|li|tr|blockquote)>/gi, '\n')
+      .replace(/<(br\s*\/?|hr\s*\/?)>/gi, '\n')
       .replace(/<[^>]+>/g, ' ')
       .replace(/&nbsp;/gi, ' ')
       .replace(/&amp;/gi, '&')
       .replace(/&lt;/gi, '<')
       .replace(/&gt;/gi, '>')
       .replace(/&quot;/gi, '"')
-      .replace(/&#39;/gi, "'")
-      .replace(/\s+/g, ' ')
-      .trim();
+      .replace(/&#39;/gi, "'");
     
-    // 将每句话单独分段（在句子结尾后添加单个换行）
-    // 匹配中英文句号、问号、感叹号
+    // 规范化空白字符：将多个空格/换行合并
     text = text
-      .replace(/([.!?。！？])(\s+)(?=[A-Z"'"\u4e00-\u9fa5])/g, '$1\n')
-      .replace(/([.!?。！？])$/gm, '$1\n');
+      .replace(/[ \t]+/g, ' ')  // 将多个空格/制表符合并为单个空格
+      .replace(/\n[ \t]+/g, '\n')  // 移除行首空格
+      .replace(/[ \t]+\n/g, '\n')  // 移除行尾空格
+      .replace(/\n{3,}/g, '\n\n')  // 将3个以上连续换行合并为2个
+      .trim();
     
     return text;
   }

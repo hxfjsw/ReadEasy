@@ -44,7 +44,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
 }) => {
   if (loadingState.isLoading) {
     return (
-      <div className={`flex-1 overflow-hidden ${themeStyles.bg} relative`}>
+      <div className={`flex-1 overflow-auto ${themeStyles.bg} relative`}>
         <div className="flex flex-col items-center justify-center h-full space-y-6">
           <Spin size="large" />
           <div className="text-center space-y-3 w-80">
@@ -58,7 +58,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
 
   if (!fileContent) {
     return (
-      <div className={`flex-1 overflow-hidden ${themeStyles.bg} relative`}>
+      <div className={`flex-1 overflow-auto ${themeStyles.bg} relative`}>
         <Empty description="请选择或拖拽文件到此处" className="mt-20">
           <Button type="primary" onClick={onFileSelect} icon={<UploadOutlined />}>选择文件</Button>
         </Empty>
@@ -70,7 +70,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
     <div className="flex-1 flex overflow-hidden">
       <div ref={contentRef} className={`flex-1 overflow-hidden ${themeStyles.bg} relative`} onMouseUp={onMouseUp}>
         <div className="flex flex-col h-full">
-          <div className={`flex-1 reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} shadow-sm overflow-hidden`} style={{ fontSize: `${fontSize}px`, lineHeight }}>
+          <div className={`flex-1 reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} shadow-sm overflow-auto`} style={{ fontSize: `${fontSize}px`, lineHeight }}>
             <div className={`${themeStyles.text} whitespace-pre-wrap`}>
               <RenderContent 
                 text={fileContent}

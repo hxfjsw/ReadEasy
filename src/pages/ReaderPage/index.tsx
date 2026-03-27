@@ -117,7 +117,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         onThemeToggle={() => settings.updateTheme(settings.theme === 'dark' ? 'light' : 'dark')}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-auto">
         <ContentArea
           loadingState={file.loadingState}
           fileContent={file.fileContent}

@@ -10,9 +10,12 @@ interface WordPopupProps {
   onClose: () => void;
   onPlayPronunciation?: (word: string) => void;
   mode?: 'modal' | 'sidebar';
-  bookName?: string; // 当前书籍名称，用于自动创建单词本
-  onMasteredStatusChange?: (word: string, isMastered: boolean) => void; // 熟词状态变化回调
+  bookName?: string;
+  onMasteredStatusChange?: (word: string, isMastered: boolean) => void;
 }
+
+// 加载状态类型
+type LoadingStage = 'idle' | 'basic' | 'detailed' | 'complete';
 
 const WordPopup: React.FC<WordPopupProps> = ({ 
   word, 
@@ -24,8 +27,9 @@ const WordPopup: React.FC<WordPopupProps> = ({
   bookName,
   onMasteredStatusChange
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [definition, setDefinition] = useState<WordDefinition | null>(null);
+  const [loadingStage, setLoadingStage] = useState<LoadingStage>('idle');
+  const [basicDef, setBasicDef] = useState<Partial<WordDefinition> | null>(null);
+  const [detailedDef, setDetailedDef] = useState<Partial<WordDefinition> | null>(null);
   const [wordBooks, setWordBooks] = useState<WordBook[]>([]);
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const [addingToBook, setAddingToBook] = useState(false);
@@ -36,12 +40,12 @@ const WordPopup: React.FC<WordPopupProps> = ({
   // 获取单词定义和熟词状态
   useEffect(() => {
     if (visible && word) {
-      fetchDefinition();
+      fetchDefinitionStepByStep();
       fetchWordBooks();
       checkMasteredStatus();
     }
   }, [visible, word]);
-  
+
   // 检查是否是熟词
   const checkMasteredStatus = async () => {
     try {
@@ -54,16 +58,13 @@ const WordPopup: React.FC<WordPopupProps> = ({
 
   // 将数据库单词转换为 WordDefinition 格式
   const convertWordToDefinition = (wordData: Word): WordDefinition => {
-    // 解析中文释义（格式可能是 "pos meaning; pos meaning" 或 JSON）
     let definitions: Array<{pos: string; meaningCn: string; meaningEn: string; examples: string[]}> = [];
     
     try {
-      // 尝试解析为 JSON
       const parsed = JSON.parse(wordData.definitionCn || '[]');
       if (Array.isArray(parsed)) {
         definitions = parsed;
       } else {
-        // 旧格式：用分号分隔
         definitions = (wordData.definitionCn || '').split('; ').map((def) => ({
           pos: def.split(' ')[0] || '',
           meaningCn: def.split(' ').slice(1).join(' ') || def,
@@ -72,7 +73,6 @@ const WordPopup: React.FC<WordPopupProps> = ({
         }));
       }
     } catch {
-      // 解析失败，使用简单分割
       definitions = (wordData.definitionCn || '').split('; ').map((def) => ({
         pos: def.split(' ')[0] || '',
         meaningCn: def.split(' ').slice(1).join(' ') || def,
@@ -81,7 +81,6 @@ const WordPopup: React.FC<WordPopupProps> = ({
       }));
     }
 
-    // 解析词根分析
     let rootAnalysis = wordData.rootAnalysis;
     if (typeof rootAnalysis === 'string' && rootAnalysis) {
       try {
@@ -91,7 +90,6 @@ const WordPopup: React.FC<WordPopupProps> = ({
       }
     }
 
-    // 解析相关词
     let relatedWords = wordData.relatedWords;
     if (typeof relatedWords === 'string' && relatedWords) {
       try {
@@ -110,15 +108,18 @@ const WordPopup: React.FC<WordPopupProps> = ({
       etymology: wordData.etymology,
       rootAnalysis,
       relatedWords,
-      contextAnalysis: undefined, // 单词本中的单词可能没有上下文分析
+      contextAnalysis: undefined,
       contextTranslation: undefined,
       synonyms: [],
       antonyms: [],
     };
   };
 
-  const fetchDefinition = async () => {
-    setLoading(true);
+  // 分步获取单词定义
+  const fetchDefinitionStepByStep = async () => {
+    setLoadingStage('basic');
+    setBasicDef(null);
+    setDetailedDef(null);
     setSource(null);
     
     try {
@@ -127,31 +128,52 @@ const WordPopup: React.FC<WordPopupProps> = ({
       
       if (wordFromDB) {
         console.log('[WordPopup] 从单词本找到单词:', wordFromDB);
-        setDefinition(convertWordToDefinition(wordFromDB));
+        const fullDef = convertWordToDefinition(wordFromDB);
+        setBasicDef(fullDef);
+        setDetailedDef(fullDef);
         setSource('wordbook');
-        setLoading(false);
+        setLoadingStage('complete');
         return;
       }
       
-      // 2. 单词本中没有，调用 AI 接口
-      console.log('[WordPopup] 单词本中未找到，调用 AI 接口:', word);
-      const result = await window.electron.ipcRenderer.invoke('ai:defineWord', {
+      // 2. 单词本中没有，先获取基础定义（快速显示）
+      console.log('[WordPopup] 获取基础定义:', word);
+      const basicResult = await window.electron.ipcRenderer.invoke('ai:defineWordBasic', {
         word,
-        context,
       });
       
-      if (result.success) {
-        setDefinition(result.data);
+      if (basicResult.success) {
+        setBasicDef(basicResult.data);
         setSource('ai');
-        // 自动保存到以书名命名的单词本
-        await autoSaveToBookByName(result.data);
+        setLoadingStage('detailed');
+        
+        // 3. 获取详细定义（词源、词根等）
+        console.log('[WordPopup] 获取详细定义:', word);
+        const detailedResult = await window.electron.ipcRenderer.invoke('ai:defineWordDetailed', {
+          word,
+          context,
+        });
+        
+        if (detailedResult.success) {
+          setDetailedDef(detailedResult.data);
+          
+          // 合并定义用于保存
+          const fullDefinition: WordDefinition = {
+            ...(basicResult.data as WordDefinition),
+            ...detailedResult.data,
+          };
+          
+          // 自动保存到单词本
+          await autoSaveToBookByName(fullDefinition);
+        }
       } else {
-        message.error('获取单词定义失败: ' + (result.message || result.error || '未知错误'));
+        message.error('获取单词定义失败: ' + (basicResult.message || basicResult.error || '未知错误'));
       }
     } catch (error) {
+      console.error('[WordPopup] 获取定义失败:', error);
       message.error('获取单词定义失败');
     } finally {
-      setLoading(false);
+      setLoadingStage('complete');
     }
   };
 
@@ -196,38 +218,27 @@ const WordPopup: React.FC<WordPopupProps> = ({
     }
   };
 
-  // 自动保存到以书名命名的单词本（没有则创建）
+  // 自动保存到以书名命名的单词本
   const autoSaveToBookByName = async (def: WordDefinition) => {
-    if (!bookName) {
-      console.log('没有书名，跳过自动保存');
-      return;
-    }
+    if (!bookName) return;
     
     try {
-      // 1. 查找是否已存在该书名的单词本
       const books = await window.electron.ipcRenderer.invoke('db:getWordBooks');
       let targetBook = books.find((b: WordBook) => b.name === bookName);
       
-      // 2. 不存在则创建
       if (!targetBook) {
-        console.log(`创建新单词本: ${bookName}`);
         const result = await window.electron.ipcRenderer.invoke('db:addWordBook', {
           name: bookName,
           description: `《${bookName}》阅读时自动收藏的单词`,
         });
         if (result && result.success) {
-          // 重新获取单词本列表
           const updatedBooks = await window.electron.ipcRenderer.invoke('db:getWordBooks');
           targetBook = updatedBooks.find((b: WordBook) => b.name === bookName);
         }
       }
       
-      if (!targetBook) {
-        console.error('创建单词本失败');
-        return;
-      }
+      if (!targetBook) return;
       
-      // 3. 添加单词到单词本
       const wordResult = await window.electron.ipcRenderer.invoke('db:addWord', {
         word: def.word,
         phoneticUk: def.phoneticUk,
@@ -273,6 +284,8 @@ const WordPopup: React.FC<WordPopupProps> = ({
       message.warning('请先选择单词本');
       return;
     }
+    
+    const definition = basicDef || detailedDef;
     if (!definition) {
       message.warning('单词定义尚未加载完成');
       return;
@@ -280,17 +293,22 @@ const WordPopup: React.FC<WordPopupProps> = ({
 
     setAddingToBook(true);
     try {
+      const fullDef: WordDefinition = {
+        ...(basicDef || {}),
+        ...(detailedDef || {}),
+      } as WordDefinition;
+      
       const wordResult = await window.electron.ipcRenderer.invoke('db:addWord', {
-        word: definition.word,
-        phoneticUk: definition.phoneticUk,
-        phoneticUs: definition.phoneticUs,
-        definitionCn: JSON.stringify(definition.definitions),
+        word: fullDef.word,
+        phoneticUk: fullDef.phoneticUk,
+        phoneticUs: fullDef.phoneticUs,
+        definitionCn: JSON.stringify(fullDef.definitions),
         definitionEn: '',
-        level: definition.level || 'unknown',
+        level: fullDef.level || 'unknown',
         source: 'user',
-        etymology: definition.etymology,
-        rootAnalysis: definition.rootAnalysis,
-        relatedWords: definition.relatedWords,
+        etymology: fullDef.etymology,
+        rootAnalysis: fullDef.rootAnalysis,
+        relatedWords: fullDef.relatedWords,
       });
 
       if (wordResult && wordResult.success) {
@@ -298,8 +316,8 @@ const WordPopup: React.FC<WordPopupProps> = ({
           selectedBookId, 
           wordResult.id,
           context,
-          definition.contextAnalysis,
-          definition.contextTranslation
+          fullDef.contextAnalysis,
+          fullDef.contextTranslation
         );
         message.success(`已将 "${word}" 添加到单词本`);
         onClose();
@@ -320,118 +338,127 @@ const WordPopup: React.FC<WordPopupProps> = ({
     return <Tag color="blue">AI 解析</Tag>;
   };
 
-  const renderDefinition = () => {
-    if (!definition) return null;
+  // 渲染基础定义（始终显示）
+  const renderBasicDefinition = () => {
+    if (!basicDef) return null;
+
+    return (
+      <div className="border-b pb-3 mb-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-2xl font-bold">{basicDef.word || word}</h2>
+          {basicDef.level && (
+            <Tag color="blue">{basicDef.level}</Tag>
+          )}
+          {isMastered && (
+            <Tag color="green" icon={<CheckCircleOutlined />}>熟词</Tag>
+          )}
+          {renderSourceBadge()}
+          {onPlayPronunciation && (
+            <Button
+              type="text"
+              icon={<SoundOutlined />}
+              onClick={() => onPlayPronunciation(basicDef.word || word)}
+              title="播放发音"
+            />
+          )}
+        </div>
+        <div className="flex gap-4 text-gray-500 mt-1">
+          {basicDef.phoneticUk && (
+            <span>英 {basicDef.phoneticUk}</span>
+          )}
+          {basicDef.phoneticUs && (
+            <span>美 {basicDef.phoneticUs}</span>
+          )}
+        </div>
+        
+        {/* 释义 */}
+        {basicDef.definitions && basicDef.definitions.length > 0 && (
+          <div className="mt-3">
+            <h3 className="font-semibold mb-2">释义</h3>
+            <div className="space-y-2">
+              {basicDef.definitions.map((def, index) => (
+                <div key={index} className="flex gap-2">
+                  <Tag color="default">{def.pos}</Tag>
+                  <div>
+                    <div className="text-gray-800">{def.meaningCn}</div>
+                    {def.meaningEn && (
+                      <div className="text-gray-500 text-sm">{def.meaningEn}</div>
+                    )}
+                    {def.examples && def.examples.length > 0 && (
+                      <div className="mt-1 text-gray-600 text-sm italic">
+                        {def.examples[0]}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // 渲染详细定义（加载完成后显示）
+  const renderDetailedDefinition = () => {
+    if (!detailedDef) return null;
 
     return (
       <div className="space-y-4">
-        {/* 单词标题 */}
-        <div className="border-b pb-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-2xl font-bold">{definition.word}</h2>
-            {definition.level && (
-              <Tag color="blue">{definition.level}</Tag>
-            )}
-            {isMastered && (
-              <Tag color="green" icon={<CheckCircleOutlined />}>熟词</Tag>
-            )}
-            {renderSourceBadge()}
-            {onPlayPronunciation && (
-              <Button
-                type="text"
-                icon={<SoundOutlined />}
-                onClick={() => onPlayPronunciation(definition.word)}
-                title="播放发音"
-              />
-            )}
-          </div>
-          <div className="flex gap-4 text-gray-500 mt-1">
-            {definition.phoneticUk && (
-              <span>英 {definition.phoneticUk}</span>
-            )}
-            {definition.phoneticUs && (
-              <span>美 {definition.phoneticUs}</span>
-            )}
-          </div>
-        </div>
-
-        {/* 释义 */}
-        <div>
-          <h3 className="font-semibold mb-2">释义</h3>
-          <div className="space-y-2">
-            {definition.definitions.map((def, index) => (
-              <div key={index} className="flex gap-2">
-                <Tag color="default">{def.pos}</Tag>
-                <div>
-                  <div className="text-gray-800">{def.meaningCn}</div>
-                  {def.meaningEn && (
-                    <div className="text-gray-500 text-sm">{def.meaningEn}</div>
-                  )}
-                  {def.examples && def.examples.length > 0 && (
-                    <div className="mt-1 text-gray-600 text-sm italic">
-                      {def.examples[0]}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* 词源和词根词缀分析 */}
-        {(definition.etymology || definition.rootAnalysis) && (
+        {(detailedDef.etymology || detailedDef.rootAnalysis) && (
           <div className="bg-purple-50 p-3 rounded border-l-4 border-purple-400">
             <div className="text-purple-600 text-sm mb-2 font-medium">词源与词根词缀</div>
             
             {/* 词源 */}
-            {definition.etymology && (
+            {detailedDef.etymology && (
               <div className="mb-2 text-gray-700 text-sm">
-                <span className="font-medium">词源: </span>{definition.etymology}
+                <span className="font-medium">词源: </span>{detailedDef.etymology}
               </div>
             )}
             
             {/* 词根词缀拆解 */}
-            {definition.rootAnalysis && (
+            {detailedDef.rootAnalysis && (
               <div className="mb-2">
                 <div className="flex items-center gap-2 mb-1">
-                  {definition.rootAnalysis.prefix && (
+                  {detailedDef.rootAnalysis.prefix && (
                     <div className="flex items-center">
-                      <span className="text-blue-600 font-bold">{definition.rootAnalysis.prefix.value}</span>
+                      <span className="text-blue-600 font-bold">{detailedDef.rootAnalysis.prefix.value}</span>
                       <span className="text-gray-400 mx-1">+</span>
                     </div>
                   )}
                   <div className="flex items-center">
-                    <span className="text-red-600 font-bold">{definition.rootAnalysis.root.value}</span>
-                    {definition.rootAnalysis.root.origin && (
-                      <span className="text-xs text-gray-400 ml-1">({definition.rootAnalysis.root.origin})</span>
+                    <span className="text-red-600 font-bold">{detailedDef.rootAnalysis.root.value}</span>
+                    {detailedDef.rootAnalysis.root.origin && (
+                      <span className="text-xs text-gray-400 ml-1">({detailedDef.rootAnalysis.root.origin})</span>
                     )}
                   </div>
-                  {definition.rootAnalysis.suffix && (
+                  {detailedDef.rootAnalysis.suffix && (
                     <div className="flex items-center">
                       <span className="text-gray-400 mx-1">+</span>
-                      <span className="text-green-600 font-bold">{definition.rootAnalysis.suffix.value}</span>
+                      <span className="text-green-600 font-bold">{detailedDef.rootAnalysis.suffix.value}</span>
                     </div>
                   )}
                 </div>
                 <div className="text-sm text-gray-600">
-                  {definition.rootAnalysis.prefix && (
-                    <div>前缀 <strong>{definition.rootAnalysis.prefix.value}</strong>: {definition.rootAnalysis.prefix.meaning}</div>
+                  {detailedDef.rootAnalysis.prefix && (
+                    <div>前缀 <strong>{detailedDef.rootAnalysis.prefix.value}</strong>: {detailedDef.rootAnalysis.prefix.meaning}</div>
                   )}
-                  <div>词根 <strong>{definition.rootAnalysis.root.value}</strong>: {definition.rootAnalysis.root.meaning}</div>
-                  {definition.rootAnalysis.suffix && (
-                    <div>后缀 <strong>{definition.rootAnalysis.suffix.value}</strong>: {definition.rootAnalysis.suffix.meaning}</div>
+                  <div>词根 <strong>{detailedDef.rootAnalysis.root.value}</strong>: {detailedDef.rootAnalysis.root.meaning}</div>
+                  {detailedDef.rootAnalysis.suffix && (
+                    <div>后缀 <strong>{detailedDef.rootAnalysis.suffix.value}</strong>: {detailedDef.rootAnalysis.suffix.meaning}</div>
                   )}
-                  <div className="mt-1 text-gray-700 italic">{definition.rootAnalysis.explanation}</div>
+                  <div className="mt-1 text-gray-700 italic">{detailedDef.rootAnalysis.explanation}</div>
                 </div>
               </div>
             )}
             
             {/* 相关词 */}
-            {definition.relatedWords && definition.relatedWords.length > 0 && (
+            {detailedDef.relatedWords && detailedDef.relatedWords.length > 0 && (
               <div className="mt-2 pt-2 border-t border-purple-200">
                 <div className="text-xs text-purple-500 mb-1">相关词汇</div>
                 <div className="flex flex-wrap gap-2">
-                  {definition.relatedWords.map((rw, index) => (
+                  {detailedDef.relatedWords.map((rw, index) => (
                     <div key={index} className="bg-white px-2 py-1 rounded text-xs">
                       <span className="font-medium text-gray-800">{rw.word}</span>
                       <span className="text-gray-400 mx-1">·</span>
@@ -445,20 +472,20 @@ const WordPopup: React.FC<WordPopupProps> = ({
         )}
 
         {/* 同义词/反义词 */}
-        {(definition.synonyms?.length || definition.antonyms?.length) && (
+        {(detailedDef.synonyms?.length || detailedDef.antonyms?.length) && (
           <div className="flex gap-4">
-            {definition.synonyms && definition.synonyms.length > 0 && (
+            {detailedDef.synonyms && detailedDef.synonyms.length > 0 && (
               <div>
                 <span className="text-gray-500">同义词: </span>
-                {definition.synonyms.map(s => (
+                {detailedDef.synonyms.map(s => (
                   <Tag key={s} className="text-xs">{s}</Tag>
                 ))}
               </div>
             )}
-            {definition.antonyms && definition.antonyms.length > 0 && (
+            {detailedDef.antonyms && detailedDef.antonyms.length > 0 && (
               <div>
                 <span className="text-gray-500">反义词: </span>
-                {definition.antonyms.map(a => (
+                {detailedDef.antonyms.map(a => (
                   <Tag key={a} className="text-xs">{a}</Tag>
                 ))}
               </div>
@@ -476,75 +503,121 @@ const WordPopup: React.FC<WordPopupProps> = ({
             </div>
 
             {/* 上下文翻译 */}
-            {definition.contextTranslation && (
+            {detailedDef.contextTranslation && (
               <div className="bg-blue-50 p-3 rounded border-l-4 border-blue-400">
                 <div className="text-blue-600 text-sm mb-1 font-medium">上下文翻译</div>
-                <div className="text-gray-800">{definition.contextTranslation}</div>
+                <div className="text-gray-800">{detailedDef.contextTranslation}</div>
               </div>
             )}
 
             {/* 上下文分析 */}
-            {definition.contextAnalysis && (
+            {detailedDef.contextAnalysis && (
               <div className="bg-green-50 p-3 rounded border-l-4 border-green-400">
                 <div className="text-green-600 text-sm mb-1 font-medium">上下文分析</div>
-                <div className="text-gray-800 leading-relaxed">{definition.contextAnalysis}</div>
+                <div className="text-gray-800 leading-relaxed">{detailedDef.contextAnalysis}</div>
               </div>
             )}
           </div>
         )}
+      </div>
+    );
+  };
 
-        {/* 熟词操作 */}
-        <div className="border-t pt-4 mt-4">
-          {isMastered ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircleOutlined />
-                <span>已掌握该单词</span>
-              </div>
-              <Button onClick={handleUnmarkAsMastered}>
-                取消熟词
-              </Button>
+  // 渲染加载状态指示器
+  const renderLoadingIndicator = () => {
+    if (loadingStage === 'complete' || loadingStage === 'idle') return null;
+    
+    return (
+      <div className="flex items-center gap-2 text-gray-500 py-2">
+        <Spin size="small" />
+        <span className="text-sm">
+          {loadingStage === 'basic' && '正在查询基础释义...'}
+          {loadingStage === 'detailed' && '正在查询词源、词根分析...'}
+        </span>
+      </div>
+    );
+  };
+
+  // 渲染熟词操作
+  const renderMasteredSection = () => {
+    if (!basicDef) return null;
+    
+    return (
+      <div className="border-t pt-4 mt-4">
+        {isMastered ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-green-600">
+              <CheckCircleOutlined />
+              <span>已掌握该单词</span>
             </div>
-          ) : (
-            <Button
-              icon={<CheckCircleOutlined />}
-              loading={masteringWord}
-              onClick={handleMarkAsMastered}
-              block
-            >
-              标记为熟词（不再提示）
+            <Button onClick={handleUnmarkAsMastered}>
+              取消熟词
             </Button>
-          )}
-        </div>
-
-        {/* 添加到单词本 - 仅 AI 来源时显示 */}
-        {source === 'ai' && (
-          <div className="border-t pt-4 mt-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <BookOutlined />
-              <span>添加到单词本:</span>
-              <Select
-                style={{ width: 150 }}
-                placeholder="选择单词本"
-                value={selectedBookId}
-                onChange={setSelectedBookId}
-                options={wordBooks.map(book => ({
-                  label: book.name,
-                  value: book.id,
-                }))}
-              />
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                loading={addingToBook}
-                onClick={handleAddToWordBook}
-                disabled={!selectedBookId}
-              >
-                添加
-              </Button>
-            </div>
           </div>
+        ) : (
+          <Button
+            icon={<CheckCircleOutlined />}
+            loading={masteringWord}
+            onClick={handleMarkAsMastered}
+            block
+          >
+            标记为熟词（不再提示）
+          </Button>
         )}
+      </div>
+    );
+  };
+
+  // 渲染添加到单词本
+  const renderAddToBookSection = () => {
+    if (source !== 'ai' || !basicDef) return null;
+    
+    return (
+      <div className="border-t pt-4 mt-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <BookOutlined />
+          <span>添加到单词本:</span>
+          <Select
+            style={{ width: 150 }}
+            placeholder="选择单词本"
+            value={selectedBookId}
+            onChange={setSelectedBookId}
+            options={wordBooks.map(book => ({
+              label: book.name,
+              value: book.id,
+            }))}
+          />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            loading={addingToBook}
+            onClick={handleAddToWordBook}
+            disabled={!selectedBookId}
+          >
+            添加
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  // 渲染完整内容
+  const renderContent = () => {
+    if (loadingStage === 'idle' || (!basicDef && loadingStage !== 'complete')) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <Spin size="large" tip="查询中..." />
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {renderBasicDefinition()}
+        {renderLoadingIndicator()}
+        {renderDetailedDefinition()}
+        {renderMasteredSection()}
+        {renderAddToBookSection()}
       </div>
     );
   };
@@ -567,13 +640,7 @@ const WordPopup: React.FC<WordPopupProps> = ({
         
         {/* 内容 */}
         <div className="flex-1 overflow-auto p-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Spin size="large" tip="查询中..." />
-            </div>
-          ) : (
-            renderDefinition()
-          )}
+          {renderContent()}
         </div>
       </div>
     );
@@ -589,13 +656,7 @@ const WordPopup: React.FC<WordPopupProps> = ({
       width={600}
       destroyOnClose
     >
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Spin size="large" tip="查询中..." />
-        </div>
-      ) : (
-        renderDefinition()
-      )}
+      {renderContent()}
     </Modal>
   );
 };
