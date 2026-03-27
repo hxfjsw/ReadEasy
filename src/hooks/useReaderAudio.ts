@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { message } from 'antd';
-import { useWhisper } from './useWhisper';
+import { useWhisper, SubtitleItem } from './useWhisper';
 
 // 高亮句子信息
 export interface HighlightedSentence {
@@ -10,18 +10,25 @@ export interface HighlightedSentence {
   endTime: number;
 }
 
+// 导出 SubtitleItem
+export type { SubtitleItem };
+
 export function useReaderAudio(segmentDuration: number = 5, similarityThreshold: number = 0.5) {
   const [audioFile, setAudioFile] = useState<string>('');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [highlightedSentence, setHighlightedSentence] = useState<HighlightedSentence | null>(null);
+  const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
+  const [isGeneratingSubtitles, setIsGeneratingSubtitles] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastTranscribedSegmentRef = useRef<number>(-1);
   const contentTextRef = useRef<string>('');
+  const currentSubtitleRef = useRef<SubtitleItem | null>(null);
   
-  const whisper = useWhisper();
+  const whisper = useWhisper(segmentDuration);
 
   // 选择音频文件
   const handleSelectAudio = useCallback(async () => {
@@ -72,11 +79,14 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
           const file = new File([blob], path.split('/').pop() || 'audio.mp3', { type: 'audio/mpeg' });
           await whisper.initAudioSegments(file, segmentDuration);
           lastTranscribedSegmentRef.current = -1;
+          // 清空之前的字幕
+          setSubtitles([]);
+          currentSubtitleRef.current = null;
         } catch (e) {
           console.error('初始化音频分段失败:', e);
         }
         
-        message.success('有声书已加载');
+        message.success('有声书已加载，请生成字幕');
       }
     } catch (error) {
       console.error('选择音频文件失败:', error);
@@ -107,46 +117,42 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
             const currentTime = audioRef.current.currentTime;
             setAudioCurrentTime(currentTime);
             
-            // 实时识别：根据设置的分片时长识别
-            const currentSegment = Math.floor(currentTime / segmentDuration);
-            if (currentSegment !== lastTranscribedSegmentRef.current && currentSegment >= 0) {
-              lastTranscribedSegmentRef.current = currentSegment;
-              // 触发识别
-              handleTranscriptionAtTime(currentTime);
+            // 查表模式：根据当前时间获取对应字幕
+            const subtitle = whisper.getSubtitleAtTime(currentTime);
+            if (subtitle && subtitle.text && subtitle.index !== currentSubtitleRef.current?.index) {
+              currentSubtitleRef.current = subtitle;
+              handleSubtitleMatch(subtitle);
             }
           }
-        }, 1000);
+        }, 200); // 更频繁的更新以获得更好的同步
       }).catch((error) => {
         console.error('播放失败:', error);
         message.error('音频播放失败');
       });
     }
-  }, [isPlayingAudio]);
+  }, [isPlayingAudio, whisper, subtitles]);
 
-  // 处理指定时间的识别和高亮
-  const handleTranscriptionAtTime = useCallback(async (currentTime: number) => {
-    if (!contentTextRef.current) return;
+  // 处理字幕匹配和高亮
+  const handleSubtitleMatch = useCallback((subtitle: SubtitleItem) => {
+    if (!contentTextRef.current || !subtitle.text) return;
     
-    // 识别当前时间段
-    const segment = await whisper.transcribeAtTime(currentTime);
+    console.log(`[Audio] 当前字幕: ${subtitle.text}`);
     
-    if (segment && segment.text) {
-      // 查找匹配的句子
-      const match = whisper.findMatchingSentence(segment.text, contentTextRef.current, similarityThreshold);
-      
-      if (match) {
-        console.log(`[Audio] 高亮句子 (相似度 ${(match.similarity * 100).toFixed(1)}%):`, match.sentence);
-        setHighlightedSentence({
-          text: match.sentence,
-          similarity: match.similarity,
-          startTime: segment.startTime,
-          endTime: segment.endTime,
-        });
-      } else {
-        console.log('[Audio] 未找到匹配的句子，识别文本:', segment.text);
-      }
+    // 查找匹配的句子
+    const match = whisper.findMatchingSentence(subtitle.text, contentTextRef.current, similarityThreshold);
+    
+    if (match) {
+      console.log(`[Audio] 高亮句子 (相似度 ${(match.similarity * 100).toFixed(1)}%):`, match.sentence);
+      setHighlightedSentence({
+        text: match.sentence,
+        similarity: match.similarity,
+        startTime: subtitle.startTime,
+        endTime: subtitle.endTime,
+      });
+    } else {
+      console.log('[Audio] 未找到匹配的句子，字幕文本:', subtitle.text);
     }
-  }, [whisper]);
+  }, [whisper, similarityThreshold]);
 
   // 暂停音频（用于查词或翻译时）
   const pauseAudioForInteraction = useCallback(() => {
@@ -178,6 +184,41 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
+  // 生成字幕
+  const generateSubtitles = useCallback(async () => {
+    if (!whisper.modelLoaded) {
+      message.warning('Whisper 模型未加载，请稍后再试');
+      return;
+    }
+    
+    setIsGeneratingSubtitles(true);
+    message.info('开始生成字幕，请稍候...');
+    
+    try {
+      const generatedSubtitles = await whisper.generateAllSubtitles(
+        (progress, current, total) => {
+          setGenerationProgress(progress);
+          if (progress % 10 === 0) {
+            message.info(`字幕生成进度: ${progress}% (${current}/${total})`);
+          }
+        }
+      );
+      
+      setSubtitles(generatedSubtitles);
+      message.success(`字幕生成完成！共 ${generatedSubtitles.length} 条`);
+    } catch (error) {
+      console.error('生成字幕失败:', error);
+      message.error('生成字幕失败');
+    } finally {
+      setIsGeneratingSubtitles(false);
+    }
+  }, [whisper]);
+
+  // 设置当前内容文本（用于句子匹配）
+  const setContentText = useCallback((text: string) => {
+    contentTextRef.current = text;
+  }, []);
+
   // 关闭音频
   const closeAudio = useCallback(() => {
     if (audioRef.current) {
@@ -189,6 +230,8 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     setAudioCurrentTime(0);
     setAudioDuration(0);
     setHighlightedSentence(null);
+    setSubtitles([]);
+    currentSubtitleRef.current = null;
     lastTranscribedSegmentRef.current = -1;
     contentTextRef.current = '';
     whisper.resetTranscription();
@@ -198,15 +241,15 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     }
   }, [whisper]);
 
-  // 设置当前内容文本（用于句子匹配）
-  const setContentText = useCallback((text: string) => {
-    contentTextRef.current = text;
-  }, []);
-
-  // 使用 Whisper 识别当前音频（手动触发全部识别）
+  // 使用 Whisper 识别当前音频（现在由 generateSubtitles 替代）
   const transcribeCurrentAudio = useCallback(async () => {
-    message.info('请播放音频，系统会自动根据播放位置识别并高亮文本');
-  }, []);
+    // 如果字幕已生成，显示提示，否则引导生成
+    if (subtitles.length > 0) {
+      message.info(`已生成 ${subtitles.length} 条字幕，可直接播放`);
+    } else {
+      message.info('请先生成字幕');
+    }
+  }, [subtitles]);
 
   // 清理音频资源
   useEffect(() => {
@@ -235,8 +278,12 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     closeAudio,
     transcribeCurrentAudio,
     setContentText,
+    generateSubtitles,
+    subtitles,
+    isGeneratingSubtitles,
+    generationProgress,
     whisperModelLoaded: whisper.modelLoaded,
     isWhisperLoading: whisper.isModelLoading,
-    isTranscribing: whisper.isTranscribing,
+    isTranscribing: whisper.isTranscribing || isGeneratingSubtitles,
   };
 }

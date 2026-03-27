@@ -1,5 +1,5 @@
-import { Button, Tag, Slider, Badge } from 'antd';
-import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, PlayCircleOutlined, PauseCircleOutlined, CustomerServiceOutlined, AudioOutlined } from '@ant-design/icons';
+import { Button, Tag, Slider, Badge, Progress } from 'antd';
+import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, PlayCircleOutlined, PauseCircleOutlined, CustomerServiceOutlined, EyeOutlined, FileAddOutlined } from '@ant-design/icons';
 import { LoadingState, Chapter } from '../../../types/reader';
 
 interface ToolbarProps {
@@ -22,9 +22,13 @@ interface ToolbarProps {
   onFormatTime: (seconds: number) => string;
   onSettingsClick: () => void;
   onThemeToggle: () => void;
-  onTranscribeAudio?: () => void;
+  onGenerateSubtitles?: () => void;
+  onShowSubtitles?: () => void;
   isWhisperLoading?: boolean;
   isTranscribing?: boolean;
+  isGeneratingSubtitles?: boolean;
+  generationProgress?: number;
+  hasSubtitles?: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -48,9 +52,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onFormatTime,
   onSettingsClick,
   onThemeToggle,
-  onTranscribeAudio,
+  onGenerateSubtitles,
+  onShowSubtitles,
   isWhisperLoading,
   isTranscribing,
+  isGeneratingSubtitles,
+  generationProgress,
+  hasSubtitles,
 }) => {
   const bgClass = theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
   
@@ -86,9 +94,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           onSeek={onAudioSeek}
           onClose={onAudioClose}
           onFormatTime={onFormatTime}
-          onTranscribe={onTranscribeAudio}
+          onGenerateSubtitles={onGenerateSubtitles}
+          onShowSubtitles={onShowSubtitles}
           isWhisperLoading={isWhisperLoading}
           isTranscribing={isTranscribing}
+          isGeneratingSubtitles={isGeneratingSubtitles}
+          generationProgress={generationProgress}
+          hasSubtitles={hasSubtitles}
         />
         
         <Button icon={<SettingOutlined />} onClick={onSettingsClick} />
@@ -109,10 +121,32 @@ const AudioControl: React.FC<{
   onSeek: (value: number) => void;
   onClose: () => void;
   onFormatTime: (seconds: number) => string;
-  onTranscribe?: () => void;
+  onGenerateSubtitles?: () => void;
+  onShowSubtitles?: () => void;
   isWhisperLoading?: boolean;
   isTranscribing?: boolean;
-}> = ({ audioFile, isPlayingAudio, audioCurrentTime, audioDuration, theme, onSelect, onToggle, onSeek, onClose, onFormatTime, onTranscribe, isWhisperLoading, isTranscribing }) => {
+  isGeneratingSubtitles?: boolean;
+  generationProgress?: number;
+  hasSubtitles?: boolean;
+}> = ({ 
+  audioFile, 
+  isPlayingAudio, 
+  audioCurrentTime, 
+  audioDuration, 
+  theme, 
+  onSelect, 
+  onToggle, 
+  onSeek, 
+  onClose, 
+  onFormatTime, 
+  onGenerateSubtitles,
+  onShowSubtitles,
+  isWhisperLoading, 
+  isTranscribing,
+  isGeneratingSubtitles,
+  generationProgress,
+  hasSubtitles,
+}) => {
   if (!audioFile) {
     return (
       <Button icon={<CustomerServiceOutlined />} size="small" onClick={onSelect}>有声书</Button>
@@ -135,19 +169,39 @@ const AudioControl: React.FC<{
       {isWhisperLoading && (
         <Badge status="processing" text="加载模型" />
       )}
-      {isTranscribing && (
+      {isGeneratingSubtitles && (
+        <div className="flex items-center gap-2" style={{ width: 120 }}>
+          <span className="text-xs text-gray-500">生成字幕</span>
+          <Progress percent={generationProgress} size="small" showInfo={false} />
+        </div>
+      )}
+      {isTranscribing && !isGeneratingSubtitles && (
         <Badge status="success" text="识别中" />
       )}
-      {!isWhisperLoading && !isTranscribing && onTranscribe && (
-        <Button 
-          type="link" 
-          size="small"
-          icon={<AudioOutlined />}
-          onClick={onTranscribe}
-          title="预加载语音识别模型"
-        >
-          预加载模型
-        </Button>
+      
+      {/* 字幕按钮 */}
+      {!isWhisperLoading && !isGeneratingSubtitles && audioFile && (
+        <>
+          {!hasSubtitles ? (
+            <Button 
+              type="primary"
+              size="small"
+              icon={<FileAddOutlined />}
+              onClick={onGenerateSubtitles}
+            >
+              生成字幕
+            </Button>
+          ) : (
+            <Button 
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={onShowSubtitles}
+            >
+              查看字幕
+            </Button>
+          )}
+        </>
       )}
     </div>
   );

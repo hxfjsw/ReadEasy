@@ -21,11 +21,24 @@ export interface TranscriptionSegment {
   index: number;
 }
 
+// 字幕条目
+export interface SubtitleItem {
+  index: number;
+  startTime: number;
+  endTime: number;
+  text: string;
+  matched?: boolean;
+  matchedText?: string;
+}
+
 export function useWhisper(segmentDuration: number = 5) {
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [transcriptionSegments, setTranscriptionSegments] = useState<TranscriptionSegment[]>([]);
+  const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
+  const [isGeneratingSubtitles, setIsGeneratingSubtitles] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
   const whisperPipelineRef = useRef<AutomaticSpeechRecognitionPipeline | null>(null);
   const audioSegmentsRef = useRef<AudioSegment[]>([]);
   const segmentDurationRef = useRef<number>(segmentDuration);
@@ -267,10 +280,77 @@ export function useWhisper(segmentDuration: number = 5) {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // 生成完整字幕（预识别所有段落）
+  const generateAllSubtitles = useCallback(async (
+    onProgress?: (progress: number, current: number, total: number) => void
+  ): Promise<SubtitleItem[]> => {
+    if (!whisperPipelineRef.current || audioSegmentsRef.current.length === 0) {
+      return [];
+    }
+    
+    setIsGeneratingSubtitles(true);
+    setGenerationProgress(0);
+    const generatedSubtitles: SubtitleItem[] = [];
+    const total = audioSegmentsRef.current.length;
+    
+    try {
+      for (let i = 0; i < total; i++) {
+        const segment = audioSegmentsRef.current[i];
+        
+        // 识别当前段落
+        const text = await transcribeSegment(segment);
+        
+        // 标记为已识别
+        segment.transcribed = true;
+        segment.text = text;
+        
+        const subtitle: SubtitleItem = {
+          index: i,
+          startTime: segment.startTime,
+          endTime: segment.endTime,
+          text: text,
+        };
+        
+        generatedSubtitles.push(subtitle);
+        
+        const progress = Math.round(((i + 1) / total) * 100);
+        setGenerationProgress(progress);
+        onProgress?.(progress, i + 1, total);
+        
+        console.log(`[Whisper] 字幕 ${i + 1}/${total} (${formatTime(segment.startTime)}-${formatTime(segment.endTime)}): ${text}`);
+      }
+      
+      setSubtitles(generatedSubtitles);
+      setTranscriptionSegments(generatedSubtitles.map(s => ({
+        text: s.text,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        index: s.index,
+      })));
+      
+      console.log(`[Whisper] 字幕生成完成，共 ${generatedSubtitles.length} 条`);
+      return generatedSubtitles;
+    } catch (error) {
+      console.error('[Whisper] 生成字幕失败:', error);
+      return generatedSubtitles;
+    } finally {
+      setIsGeneratingSubtitles(false);
+    }
+  }, [transcribeSegment]);
+
+  // 根据时间获取对应字幕
+  const getSubtitleAtTime = useCallback((currentTime: number): SubtitleItem | null => {
+    return subtitles.find(
+      s => currentTime >= s.startTime && currentTime < s.endTime
+    ) || null;
+  }, [subtitles]);
+
   // 清理
   const resetTranscription = useCallback(() => {
     audioSegmentsRef.current = [];
     setTranscriptionSegments([]);
+    setSubtitles([]);
+    setGenerationProgress(0);
   }, []);
 
   useEffect(() => {
@@ -285,8 +365,13 @@ export function useWhisper(segmentDuration: number = 5) {
     transcribeAtTime,
     getTranscriptionAtTime,
     findMatchingSentence,
+    generateAllSubtitles,
+    getSubtitleAtTime,
     resetTranscription,
     transcriptionSegments,
+    subtitles,
+    isGeneratingSubtitles,
+    generationProgress,
     isModelLoading,
     isTranscribing,
     modelLoaded,

@@ -14,6 +14,7 @@ import { SentencePopup } from './components/SentencePopup';
 import { ChapterDrawer } from './components/ChapterDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { WordPopupSidebar } from './components/WordPopupSidebar';
+import { SubtitleModal } from './components/SubtitleModal';
 
 // 导出 HighlightedSentence 类型
 export type { HighlightedSentence } from '../../hooks/useReaderAudio';
@@ -32,6 +33,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const audio = useReaderAudio(settings.segmentDuration, settings.similarityThreshold);
 
   const [chapterDrawerOpen, setChapterDrawerOpen] = useState(false);
+  const [subtitleModalOpen, setSubtitleModalOpen] = useState(false);
 
   
   const [selectedWord, setSelectedWord] = useState('');
@@ -125,9 +127,13 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         onFormatTime={audio.formatTime}
         onSettingsClick={() => settings.setSettingsDrawerOpen(true)}
         onThemeToggle={() => settings.updateTheme(settings.theme === 'dark' ? 'light' : 'dark')}
-        onTranscribeAudio={audio.transcribeCurrentAudio}
+        onGenerateSubtitles={audio.generateSubtitles}
+        onShowSubtitles={() => setSubtitleModalOpen(true)}
         isWhisperLoading={audio.isWhisperLoading}
         isTranscribing={audio.isTranscribing}
+        isGeneratingSubtitles={audio.isGeneratingSubtitles}
+        generationProgress={audio.generationProgress}
+        hasSubtitles={audio.subtitles.length > 0}
       />
 
       <div className="flex flex-1 overflow-auto">
@@ -202,6 +208,16 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         onThemeChange={settings.updateTheme}
         onSegmentDurationChange={settings.updateSegmentDuration}
         onSimilarityThresholdChange={settings.updateSimilarityThreshold}
+      />
+
+      <SubtitleModal
+        open={subtitleModalOpen}
+        subtitles={audio.subtitles}
+        isGenerating={audio.isGeneratingSubtitles}
+        progress={audio.generationProgress}
+        currentTime={audio.audioCurrentTime}
+        onClose={() => setSubtitleModalOpen(false)}
+        onGenerate={audio.generateSubtitles}
       />
     </div>
   );
