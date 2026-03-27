@@ -26,7 +26,7 @@ export function useReaderFile() {
   const [pageContents, setPageContents] = useState<string[]>([]);
   const [knownWords, setKnownWords] = useState<Set<string>>(new Set());
 
-  const PAGE_SIZE = 3000;
+  // 分页参数已改为按单词数（约500词/页），不再使用字符数
 
   const handleFileSelect = useCallback(async () => {
     try {
@@ -80,7 +80,7 @@ export function useReaderFile() {
           const contentWithTitle = chapter.title 
             ? `# ${chapter.title}\n\n${chapter.content}` 
             : chapter.content;
-          const chapterPages = splitContentIntoPages(contentWithTitle, PAGE_SIZE);
+          const chapterPages = splitContentIntoPages(contentWithTitle);
           allPages.push(...chapterPages);
           currentPageIndex += chapterPages.length;
         }
@@ -89,7 +89,7 @@ export function useReaderFile() {
         setChapters(epubChapters);
       } else {
         const fullContent = result.data || '';
-        pages = splitContentIntoPages(fullContent, PAGE_SIZE);
+        pages = splitContentIntoPages(fullContent);
         setChapters([{ id: '1', title: fileNameFromPath, content: fullContent }]);
         startPages = [0];
       }
