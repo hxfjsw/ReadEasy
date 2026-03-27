@@ -11,6 +11,7 @@ function normalizePath(path: string): string {
 export function useReaderFile() {
   const [fileContent, setFileContent] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
+  const [bookName, setBookName] = useState<string>('');
   const [filePath, setFilePath] = useState<string>('');
   const [loadingState, setLoadingState] = useState<LoadingState>({
     isLoading: false,
@@ -60,6 +61,10 @@ export function useReaderFile() {
       
       setLoadingState({ isLoading: true, stage: 'rendering', progress: 60, message: '正在处理分页...' });
       setFileName(fileNameFromPath);
+      
+      // 使用元数据标题或清理后的文件名作为书名（用于单词本）
+      const cleanBookName = result.metadata?.title || fileNameFromPath.replace(/\.[^/.]+$/, '').replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+      setBookName(cleanBookName);
       
       let pages: string[] = [];
       let startPages: number[] = [];
@@ -243,6 +248,7 @@ export function useReaderFile() {
   return {
     fileContent,
     fileName,
+    bookName,
     filePath,
     loadingState,
     chapters,

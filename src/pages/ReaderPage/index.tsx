@@ -172,7 +172,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           word={selectedWord}
           context={selectedContext}
           visible={popupVisible}
-          bookName={file.fileName}
+          bookName={file.bookName}
           onClose={() => setPopupVisible(false)}
           onMasteredStatusChange={vocab.updateKnownWords}
         />

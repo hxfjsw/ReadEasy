@@ -427,9 +427,20 @@ export class DatabaseService {
       ORDER BY wbi.added_at DESC
     `).all(wordBookId) as any[];
 
-    // 解析 JSON 字段
+    // 解析 JSON 字段并映射字段名
     const result = rows.map(row => ({
       ...row,
+      id: row.id,
+      word: row.word,
+      phoneticUk: row.phonetic_uk,
+      phoneticUs: row.phonetic_us,
+      definitionCn: row.definition_cn,
+      definitionEn: row.definition_en,
+      level: row.level,
+      frequency: row.frequency,
+      source: row.source,
+      createdAt: row.created_at,
+      etymology: row.etymology,
       rootAnalysis: row.root_analysis ? JSON.parse(row.root_analysis) : undefined,
       relatedWords: row.related_words ? JSON.parse(row.related_words) : undefined,
     }));
