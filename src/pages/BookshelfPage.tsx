@@ -20,9 +20,11 @@ import {
   PlusOutlined,
   FileUnknownOutlined,
   BookOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  EyeOutlined
 } from '@ant-design/icons';
 import type { ReadingRecord } from '../types';
+import WordPopup from '../components/WordPopup';
 
 interface BookshelfItem extends ReadingRecord {
   id: number;
@@ -51,6 +53,10 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   const [extractedWords, setExtractedWords] = useState<string[]>([]);
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [existingMasteredWords, setExistingMasteredWords] = useState<Set<string>>(new Set());
+  
+  // 单词查询弹窗状态
+  const [wordPopupVisible, setWordPopupVisible] = useState(false);
+  const [selectedWordForPopup, setSelectedWordForPopup] = useState('');
 
   // 加载书架数据
   const loadBooks = async () => {
@@ -340,6 +346,12 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     window.dispatchEvent(new CustomEvent('masteredWordsUpdated'));
   };
 
+  // 打开单词查询弹窗
+  const handleViewWord = (word: string) => {
+    setSelectedWordForPopup(word);
+    setWordPopupVisible(true);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -604,15 +616,30 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                           setSelectedWords([...selectedWords, word]);
                         }
                       }}
+                      actions={[
+                        <Button
+                          key="view"
+                          type="text"
+                          size="small"
+                          icon={<EyeOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewWord(word);
+                          }}
+                        >
+                          查看
+                        </Button>,
+                      ]}
                     >
-                      <div className="flex items-center gap-3 w-full">
+                      <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => {}}
                           className="w-4 h-4"
+                          onClick={(e) => e.stopPropagation()}
                         />
-                        <span className={`flex-1 ${isExisting ? 'text-green-600' : ''}`}>
+                        <span className={`${isExisting ? 'text-green-600' : ''}`}>
                           {word}
                           {isExisting && (
                             <Tag color="green" className="ml-2">已在熟词本</Tag>
@@ -632,6 +659,14 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
           )}
         </div>
       </Modal>
+
+      {/* 单词查询弹窗 */}
+      <WordPopup
+        word={selectedWordForPopup}
+        visible={wordPopupVisible}
+        onClose={() => setWordPopupVisible(false)}
+        bookName={selectedBook?.bookName}
+      />
     </div>
   );
 };
