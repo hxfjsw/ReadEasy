@@ -261,7 +261,7 @@ const MasteredWordsPage: React.FC = () => {
       </Card>
 
       {/* 单词列表 */}
-      <Card className="flex-1 overflow-hidden flex flex-col">
+      <Card className="flex-1 flex flex-col" bodyStyle={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {filteredWords.length === 0 ? (
           <Empty
             description={
@@ -273,7 +273,7 @@ const MasteredWordsPage: React.FC = () => {
           />
         ) : (
           <>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
               <List
                 loading={loading}
                 dataSource={paginatedWords}
@@ -307,7 +307,7 @@ const MasteredWordsPage: React.FC = () => {
               />
             </div>
             {/* 自定义分页 */}
-            <div className="flex justify-center mt-4 pt-4 border-t">
+            <div className="flex justify-center mt-4 pt-4 border-t border-gray-200">
               <Pagination
                 current={currentPage}
                 pageSize={pageSize}
