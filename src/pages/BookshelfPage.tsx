@@ -272,7 +272,8 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     try {
       // 加载已有的熟词
       const masteredWords = await window.electron.ipcRenderer.invoke('db:getMasteredWords');
-      setExistingMasteredWords(new Set(masteredWords.map((w: string) => w.toLowerCase())));
+      const masteredSet = new Set(masteredWords.map((w: string) => w.toLowerCase()));
+      setExistingMasteredWords(masteredSet);
       
       // 读取文件内容
       const fileResult = await window.electron.ipcRenderer.invoke('file:read', book.filePath);
@@ -280,8 +281,10 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         // 提取所有英文单词
         const content = fileResult.data || '';
         const words = extractWordsFromText(content);
-        // 去重并排序
-        const uniqueWords = Array.from(new Set(words)).sort();
+        // 去重并过滤掉熟词本中的单词
+        const uniqueWords = Array.from(new Set(words))
+          .filter(word => !masteredSet.has(word))
+          .sort();
         setExtractedWords(uniqueWords);
       } else {
         message.error('读取文件失败');
@@ -585,11 +588,10 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-600">
-              共提取到 <strong>{extractedWords.length}</strong> 个单词
+              共提取到 <strong>{extractedWords.length}</strong> 个单词（已自动排除熟词本中的单词）
             </span>
             <span className="text-gray-500 text-sm">
-              已选择 {selectedWords.length} 个 | 
-              已在熟词本 {selectedWords.filter(w => existingMasteredWords.has(w)).length} 个
+              已选择 {selectedWords.length} 个
             </span>
           </div>
           
@@ -605,7 +607,6 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                 dataSource={extractedWords}
                 renderItem={(word) => {
                   const isSelected = selectedWords.includes(word);
-                  const isExisting = existingMasteredWords.has(word);
                   return (
                     <List.Item
                       className={`cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
@@ -639,12 +640,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                           className="w-4 h-4"
                           onClick={(e) => e.stopPropagation()}
                         />
-                        <span className={`${isExisting ? 'text-green-600' : ''}`}>
-                          {word}
-                          {isExisting && (
-                            <Tag color="green" className="ml-2">已在熟词本</Tag>
-                          )}
-                        </span>
+                        <span>{word}</span>
                       </div>
                     </List.Item>
                   );
