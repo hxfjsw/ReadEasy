@@ -654,7 +654,7 @@ const WordPopup: React.FC<WordPopupProps> = ({
       onCancel={onClose}
       footer={null}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       {renderContent()}
     </Modal>

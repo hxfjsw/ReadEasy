@@ -25,7 +25,22 @@ import {
 } from '@ant-design/icons';
 import type { ReadingRecord } from '../types';
 import WordPopup from '../components/WordPopup';
-import { lemmatize } from 'wink-lemmatizer';
+import { verb, noun, adjective } from 'wink-lemmatizer';
+
+// 辅助函数：尝试将单词还原为原型
+const lemmatizeWord = (word: string): string => {
+  // 依次尝试动词、名词、形容词还原
+  const verbForm = verb(word);
+  if (verbForm !== word) return verbForm;
+  
+  const nounForm = noun(word);
+  if (nounForm !== word) return nounForm;
+  
+  const adjForm = adjective(word);
+  if (adjForm !== word) return adjForm;
+  
+  return word;
+};
 
 interface BookshelfItem extends ReadingRecord {
   id: number;
@@ -317,7 +332,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         // 过滤纯重复字母和常见无意义组合
         if (!/^(.)\1+$/.test(lowerWord) && lowerWord.length >= 4 && lowerWord.length <= 20) {
           // 使用 lemmatizer 还原单词原型
-          const lemma = lemmatize(lowerWord);
+          const lemma = lemmatizeWord(lowerWord);
           words.push(lemma);
         }
       });
