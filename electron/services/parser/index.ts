@@ -397,8 +397,8 @@ export class ParserService {
       const rawText = pMatch[1];
       // 保留HTML标签以便检测粗体
       const textWithTags = rawText.trim();
-      // 清理后的文本
-      const cleanText = textWithTags.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      // 清理后的文本 - 先移除内联标签，避免分割单词
+      const cleanText = this.cleanInlineTags(textWithTags).replace(/\s+/g, ' ').trim();
       
       // 跳过空段落或图片段落
       if (!cleanText || cleanText.length === 0 || rawText.includes('<img')) {
@@ -460,7 +460,7 @@ export class ParserService {
         const pattern = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
         let match;
         while ((match = pattern.exec(headerSlice)) !== null) {
-          let text = match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          let text = this.cleanInlineTags(match[1]).replace(/\s+/g, ' ').trim();
           if (text && text.length > 0 && text.length < 200) {
             candidates.push({ text, priority });
           }
@@ -616,5 +616,22 @@ export class ParserService {
       .trim();
     
     return text;
+  }
+  
+  /**
+   * 清理内联标签，避免分割单词
+   * 用于章节标题提取等需要保留文本连续性的场景
+   */
+  private cleanInlineTags(html: string): string {
+    // 内联标签列表：直接移除，不替换为空格
+    const inlineTags = /<(\/?)(span|b|i|em|strong|a|font|sup|sub|code|mark|small|u|s|strike|big|tt|var|kbd|dfn|abbr|cite|q|ins|del|bdo|ruby|rt|rp|wbr)[^>]*>/gi;
+    
+    // 块级标签替换为空格（避免单词粘连）
+    const blockTags = /<(\/?)(p|div|h[1-6]|li|tr|blockquote|pre|section|article|aside|header|footer|main|nav|figure|figcaption|td|th|dt|dd|br|hr)[^>]*>/gi;
+    
+    return html
+      .replace(inlineTags, '')  // 直接移除内联标签
+      .replace(blockTags, ' ')  // 块级标签替换为空格
+      .replace(/<[^>]+>/g, ' '); // 其他标签替换为空格
   }
 }
