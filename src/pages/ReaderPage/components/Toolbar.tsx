@@ -1,5 +1,5 @@
 import { Button, Tag, Slider, Badge, Progress } from 'antd';
-import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, PlayCircleOutlined, PauseCircleOutlined, CustomerServiceOutlined, EyeOutlined, FileAddOutlined } from '@ant-design/icons';
+import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, PlayCircleOutlined, PauseCircleOutlined, CustomerServiceOutlined, EyeOutlined, FileAddOutlined, SoundOutlined, StopOutlined } from '@ant-design/icons';
 import { LoadingState, Chapter } from '../../../types/reader';
 
 interface ToolbarProps {
@@ -29,6 +29,12 @@ interface ToolbarProps {
   isGeneratingSubtitles?: boolean;
   generationProgress?: number;
   hasSubtitles?: boolean;
+  // TTS 相关
+  isTTSReading?: boolean;
+  isTTSPaused?: boolean;
+  onTTSStart?: () => void;
+  onTTSPause?: () => void;
+  onTTSStop?: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -59,6 +65,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   isGeneratingSubtitles,
   generationProgress,
   hasSubtitles,
+  // TTS
+  isTTSReading = false,
+  isTTSPaused = false,
+  onTTSStart,
+  onTTSPause,
+  onTTSStop,
 }) => {
   const bgClass = theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
   
@@ -83,6 +95,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </span>
         )}
         
+        <TTSControl
+          isReading={isTTSReading}
+          isPaused={isTTSPaused}
+          theme={theme}
+          onStart={onTTSStart}
+          onPause={onTTSPause}
+          onStop={onTTSStop}
+        />
+        
         <AudioControl
           audioFile={audioFile}
           isPlayingAudio={isPlayingAudio}
@@ -106,6 +127,62 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <Button icon={<SettingOutlined />} onClick={onSettingsClick} />
         <Button icon={theme === 'dark' ? <SunOutlined /> : <MoonOutlined />} onClick={onThemeToggle} />
       </div>
+    </div>
+  );
+};
+
+// TTS 朗读控制组件
+const TTSControl: React.FC<{
+  isReading: boolean;
+  isPaused: boolean;
+  theme: 'light' | 'dark' | 'sepia';
+  onStart?: () => void;
+  onPause?: () => void;
+  onStop?: () => void;
+}> = ({ 
+  isReading, 
+  isPaused,
+  theme, 
+  onStart, 
+  onPause, 
+  onStop 
+}) => {
+  // 未开始朗读时显示开始按钮
+  if (!isReading) {
+    return (
+      <Button 
+        icon={<SoundOutlined />} 
+        size="small" 
+        onClick={onStart}
+        title="朗读全文"
+      >
+        朗读
+      </Button>
+    );
+  }
+  
+  // 正在朗读时显示暂停/继续和停止按钮
+  return (
+    <div className={`flex items-center gap-1 px-2 py-1 rounded ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}`}>
+      <Button 
+        type="primary" 
+        size="small" 
+        icon={isPaused ? <PlayCircleOutlined /> : <PauseCircleOutlined />} 
+        onClick={onPause}
+        title={isPaused ? '继续朗读' : '暂停朗读'}
+      >
+        {isPaused ? '继续' : '暂停'}
+      </Button>
+      <Button 
+        type="text" 
+        size="small" 
+        danger 
+        icon={<StopOutlined />}
+        onClick={onStop}
+        title="停止朗读"
+      >
+        停止
+      </Button>
     </div>
   );
 };

@@ -6,6 +6,7 @@ import { useReaderAudio } from '../../hooks/useReaderAudio';
 import { useReaderFile } from '../../hooks/useReaderFile';
 import { useReaderVocabulary } from '../../hooks/useReaderVocabulary';
 import { useReaderSettings } from '../../hooks/useReaderSettings';
+import { useReaderTTS } from '../../hooks/useReaderTTS';
 import { getThemeStyles } from '../../utils/readerHelpers';
 import { ReaderPageProps } from '../../types/reader';
 import { Toolbar } from './components/Toolbar';
@@ -31,6 +32,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const vocab = useReaderVocabulary();
   const settings = useReaderSettings();
   const audio = useReaderAudio(settings.segmentDuration, settings.similarityThreshold);
+  const tts = useReaderTTS();
 
   const [chapterDrawerOpen, setChapterDrawerOpen] = useState(false);
   const [subtitleModalOpen, setSubtitleModalOpen] = useState(false);
@@ -134,6 +136,12 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         isGeneratingSubtitles={audio.isGeneratingSubtitles}
         generationProgress={audio.generationProgress}
         hasSubtitles={audio.subtitles.length > 0}
+        // TTS
+        isTTSReading={tts.isReadingAloud}
+        isTTSPaused={tts.isPaused}
+        onTTSStart={() => file.fileContent && tts.startReadingAloud(file.fileContent)}
+        onTTSPause={() => tts.isPaused ? tts.startReadingAloud(file.fileContent || '') : tts.pauseReadingAloud()}
+        onTTSStop={tts.stopReadingAloud}
       />
 
       <div className="flex flex-1 overflow-auto">
