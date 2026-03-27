@@ -76,7 +76,11 @@ export function useReaderFile() {
         
         for (const chapter of epubChapters) {
           startPages.push(currentPageIndex);
-          const chapterPages = splitContentIntoPages(chapter.content, PAGE_SIZE);
+          // 在章节内容开头添加标题
+          const contentWithTitle = chapter.title 
+            ? `# ${chapter.title}\n\n${chapter.content}` 
+            : chapter.content;
+          const chapterPages = splitContentIntoPages(contentWithTitle, PAGE_SIZE);
           allPages.push(...chapterPages);
           currentPageIndex += chapterPages.length;
         }

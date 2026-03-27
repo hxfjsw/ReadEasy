@@ -117,33 +117,59 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
   vocabularyAnalysis, 
   onWordClick 
 }) => {
-  const parts = text.split(/(\s+|[.,!?;:"()[\]{}])/);
+  // 按行分割，处理 Markdown 标题
+  const lines = text.split('\n');
   
-  return parts.map((part, index) => {
-    if (!/^[a-zA-Z]+$/.test(part)) return <span key={index}>{part}</span>;
-    
-    const contextStart = Math.max(0, index - 20);
-    const contextEnd = Math.min(parts.length, index + 20);
-    const context = parts.slice(contextStart, contextEnd).join('');
-    
-    const lowerWord = part.toLowerCase();
-    const isKnown = knownWords.has(lowerWord);
-    const wordLevel = vocabularyAnalysis.get(lowerWord);
-    const userLevelIndex = levelOrder.indexOf(vocabularyLevel);
-    const wordLevelIndex = wordLevel ? levelOrder.indexOf(wordLevel) : -1;
-    const isUnknown = !isKnown && wordLevel && wordLevelIndex > userLevelIndex;
-    const levelColor = wordLevel ? levelColors[wordLevel] : '';
-    
-    return (
-      <Tooltip key={index} title={part}>
-        <span
-          className={`cursor-pointer hover:bg-yellow-200 hover:text-blue-600 transition-colors rounded px-0.5 ${isUnknown ? 'border-b-2 border-red-400 bg-red-50' : ''}`}
-          style={levelColor ? { borderBottom: `2px solid ${levelColor}` } : {}}
-          onClick={() => onWordClick(part.toLowerCase(), context)}
-        >
-          {part}
-        </span>
-      </Tooltip>
-    );
-  });
+  return (
+    <>
+      {lines.map((line, lineIndex) => {
+        // 检测 Markdown 标题 (# 开头)
+        const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          const headingText = headingMatch[2];
+          const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
+          return (
+            <HeadingTag key={`h-${lineIndex}`} className="text-2xl font-bold my-4">
+              {headingText}
+            </HeadingTag>
+          );
+        }
+        
+        // 处理普通行
+        const parts = line.split(/(\s+|[.,!?;:"()[\]{}])/);
+        return (
+          <div key={`line-${lineIndex}`} className="min-h-[1.5em]">
+            {parts.map((part, index) => {
+              if (!/^[a-zA-Z]+$/.test(part)) return <span key={index}>{part}</span>;
+              
+              const contextStart = Math.max(0, index - 20);
+              const contextEnd = Math.min(parts.length, index + 20);
+              const context = parts.slice(contextStart, contextEnd).join('');
+              
+              const lowerWord = part.toLowerCase();
+              const isKnown = knownWords.has(lowerWord);
+              const wordLevel = vocabularyAnalysis.get(lowerWord);
+              const userLevelIndex = levelOrder.indexOf(vocabularyLevel);
+              const wordLevelIndex = wordLevel ? levelOrder.indexOf(wordLevel) : -1;
+              const isUnknown = !isKnown && wordLevel && wordLevelIndex > userLevelIndex;
+              const levelColor = wordLevel ? levelColors[wordLevel] : '';
+              
+              return (
+                <Tooltip key={index} title={part}>
+                  <span
+                    className={`cursor-pointer hover:bg-yellow-200 hover:text-blue-600 transition-colors rounded px-0.5 ${isUnknown ? 'border-b-2 border-red-400 bg-red-50' : ''}`}
+                    style={levelColor ? { borderBottom: `2px solid ${levelColor}` } : {}}
+                    onClick={() => onWordClick(part.toLowerCase(), context)}
+                  >
+                    {part}
+                  </span>
+                </Tooltip>
+              );
+            })}
+          </div>
+        );
+      })}
+    </>
+  );
 });

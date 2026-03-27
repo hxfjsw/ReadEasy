@@ -457,11 +457,11 @@ export class ParserService {
       .replace(/\s+/g, ' ')
       .trim();
     
-    // 将每句话单独分段（在句子结尾后添加换行）
+    // 将每句话单独分段（在句子结尾后添加单个换行）
     // 匹配中英文句号、问号、感叹号
     text = text
-      .replace(/([.!?。！？])(\s+)(?=[A-Z"'"\u4e00-\u9fa5])/g, '$1\n\n')
-      .replace(/([.!?。！？])$/gm, '$1\n\n');
+      .replace(/([.!?。！？])(\s+)(?=[A-Z"'"\u4e00-\u9fa5])/g, '$1\n')
+      .replace(/([.!?。！？])$/gm, '$1\n');
     
     return text;
   }
