@@ -68,9 +68,11 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   const [extractModalOpen, setExtractModalOpen] = useState(false);
   const [extractLoading, setExtractLoading] = useState(false);
   const [extractedWords, setExtractedWords] = useState<string[]>([]);
+  const [originalExtractedWords, setOriginalExtractedWords] = useState<string[]>([]); // 保存原始顺序
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [excludedCount, setExcludedCount] = useState(0);
   const [extractPageSize, setExtractPageSize] = useState(50);
+  const [extractSortOrder, setExtractSortOrder] = useState<'original' | 'alphabetical'>('original');
   
   // 单词查询弹窗状态
   const [wordPopupVisible, setWordPopupVisible] = useState(false);
@@ -304,9 +306,14 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         const filteredCount = allUniqueWords.filter(word => masteredSet.has(word)).length;
         setExcludedCount(filteredCount);
         // 过滤掉熟词本中的单词
-        const uniqueWords = allUniqueWords
-          .filter(word => !masteredSet.has(word))
-          .sort();
+        let uniqueWords = allUniqueWords
+          .filter(word => !masteredSet.has(word));
+        // 保存原始顺序
+        setOriginalExtractedWords(uniqueWords);
+        // 根据排序方式决定是否按字母排序（默认保持原文顺序）
+        if (extractSortOrder === 'alphabetical') {
+          uniqueWords = uniqueWords.sort();
+        }
         setExtractedWords(uniqueWords);
       } else {
         message.error('读取文件失败');
@@ -322,6 +329,18 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
       setExtractLoading(false);
     }
   };
+
+  // 当排序方式改变时重新排序单词列表
+  useEffect(() => {
+    if (originalExtractedWords.length > 0) {
+      if (extractSortOrder === 'alphabetical') {
+        setExtractedWords([...originalExtractedWords].sort());
+      } else {
+        // 恢复原始顺序
+        setExtractedWords([...originalExtractedWords]);
+      }
+    }
+  }, [extractSortOrder, originalExtractedWords]);
 
   // 从文本中提取单词
   const extractWordsFromText = (text: string): string[] => {
@@ -623,6 +642,16 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
               共提取到 <strong>{extractedWords.length}</strong> 个单词（已自动排除熟词本中的 {excludedCount} 个单词）
             </span>
             <div className="flex items-center gap-4">
+              <Select
+                size="small"
+                value={extractSortOrder}
+                onChange={setExtractSortOrder}
+                options={[
+                  { value: 'original', label: '文中顺序' },
+                  { value: 'alphabetical', label: '字母排序' },
+                ]}
+                style={{ width: 100 }}
+              />
               <Select
                 size="small"
                 value={extractPageSize}
