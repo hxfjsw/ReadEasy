@@ -427,8 +427,12 @@ You MUST provide:
     return `Please provide a detailed definition for the word "${word}".${contextSection}
 
 You MUST also provide etymology analysis in CHINESE (中文) including:
-1. etymology: The origin and history of the word explained in Chinese
-2. rootAnalysis: Break down the word into its root(s), prefix, and suffix with explanations in Chinese
+1. etymology: The origin and history of the word explained in Chinese, include the original Latin/Greek/French word if applicable
+2. rootAnalysis: Accurately break down the word into its morphemes (prefix, root/stem, suffix). For each part provide:
+   - The exact morpheme as it appears in the word (e.g., "ferv-", "-ent-", "-ly")
+   - The type (prefix/root/suffix)
+   - The etymological source (Latin/Greek/Old English etc.) and precise meaning
+   - Use professional etymological terminology
 3. relatedWords: List 3-5 words that share the same root or are etymologically related, with meanings in Chinese
 
 IMPORTANT: Return ONLY a valid JSON object in the following format, without any markdown formatting or extra text:
@@ -447,12 +451,12 @@ IMPORTANT: Return ONLY a valid JSON object in the following format, without any 
   "level": "vocabulary level (elementary, middle, high, cet4, cet6, postgraduate, ielts, toefl, gre, tem8)",
   "synonyms": ["synonym1", "synonym2"],
   "antonyms": ["antonym1", "antonym2"],
-  "etymology": "词源解释，用中文说明单词的起源和历史（如：来自拉丁语/希腊语/法语等）",
+  "etymology": "词源解释，用中文详细说明单词的起源和历史，包含原始拉丁语/希腊语/法语词汇及其含义",
   "rootAnalysis": {
-    "prefix": {"value": "前缀", "meaning": "前缀的中文含义解释"},
-    "root": {"value": "词根", "meaning": "词根的中文含义解释", "origin": "词根来源语言（如：拉丁语、希腊语等）"},
-    "suffix": {"value": "后缀", "meaning": "后缀的中文含义解释"},
-    "explanation": "用中文解释这些部分如何组合形成单词的含义"
+    "prefix": {"value": "前缀部分（如：dis-, un-, pre-）", "type": "前缀", "source": "来源语言", "meaning": "准确的词源学含义"},
+    "root": {"value": "词根部分（如：ferv-, port-, spect-）", "type": "词根", "source": "拉丁语/希腊语等原始词汇", "meaning": "原始含义及演变"},
+    "suffix": {"value": "后缀部分（如：-ent-, -ly, -tion）", "type": "后缀", "source": "来源语言", "meaning": "语法功能及含义"},
+    "explanation": "用中文详细解释这些词素如何组合形成单词的完整含义，包含词源演变过程"
   },
   "relatedWords": [
     {"word": "related word 1", "meaning": "中文释义", "relation": "中文说明关联（如：共享相同词根/前缀等）"}
@@ -502,18 +506,22 @@ You MUST provide:
     return `Please provide detailed etymology and root analysis for the word "${word}".${contextSection}
 
 You MUST provide in CHINESE (中文):
-1. etymology: The origin and history of the word explained in Chinese
-2. rootAnalysis: Break down the word into its root(s), prefix, and suffix with explanations in Chinese
+1. etymology: The origin and history of the word explained in Chinese, include the original Latin/Greek/French word if applicable
+2. rootAnalysis: Accurately break down the word into its morphemes (prefix, root/stem, suffix). For each part provide:
+   - The exact morpheme as it appears in the word (e.g., "ferv-", "-ent-", "-ly")
+   - The type (prefix/root/suffix)
+   - The etymological source (Latin/Greek/Old English etc.) and precise meaning
+   - Use professional etymological terminology
 3. relatedWords: List 3-5 words that share the same root or are etymologically related, with meanings in Chinese
 
 IMPORTANT: Return ONLY a valid JSON object in the following format, without any markdown formatting or extra text:
 {
-  "etymology": "词源解释，用中文说明单词的起源和历史（如：来自拉丁语/希腊语/法语等）",
+  "etymology": "词源解释，用中文详细说明单词的起源和历史，包含原始拉丁语/希腊语/法语词汇及其含义",
   "rootAnalysis": {
-    "prefix": {"value": "前缀", "meaning": "前缀的中文含义解释"},
-    "root": {"value": "词根", "meaning": "词根的中文含义解释", "origin": "词根来源语言（如：拉丁语、希腊语等）"},
-    "suffix": {"value": "后缀", "meaning": "后缀的中文含义解释"},
-    "explanation": "用中文解释这些部分如何组合形成单词的含义"
+    "prefix": {"value": "前缀部分（如：dis-, un-, pre-）", "type": "前缀", "source": "来源语言", "meaning": "准确的词源学含义"},
+    "root": {"value": "词根部分（如：ferv-, port-, spect-）", "type": "词根", "source": "拉丁语/希腊语等原始词汇", "meaning": "原始含义及演变"},
+    "suffix": {"value": "后缀部分（如：-ent-, -ly, -tion）", "type": "后缀", "source": "来源语言", "meaning": "语法功能及含义"},
+    "explanation": "用中文详细解释这些词素如何组合形成单词的完整含义，包含词源演变过程"
   },
   "relatedWords": [
     {"word": "related word 1", "meaning": "中文释义", "relation": "中文说明关联（如：共享相同词根/前缀等）"}
