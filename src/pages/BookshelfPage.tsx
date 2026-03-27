@@ -18,7 +18,9 @@ import {
   ReadOutlined,
   ClockCircleOutlined,
   PlusOutlined,
-  FileUnknownOutlined
+  FileUnknownOutlined,
+  BookOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons';
 import type { ReadingRecord } from '../types';
 
@@ -42,6 +44,13 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   const [loading, setLoading] = useState(true);
   const [selectedBook, setSelectedBook] = useState<BookshelfItem | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  
+  // 单词提取相关状态
+  const [extractModalOpen, setExtractModalOpen] = useState(false);
+  const [extractLoading, setExtractLoading] = useState(false);
+  const [extractedWords, setExtractedWords] = useState<string[]>([]);
+  const [selectedWords, setSelectedWords] = useState<string[]>([]);
+  const [existingMasteredWords, setExistingMasteredWords] = useState<Set<string>>(new Set());
 
   // 加载书架数据
   const loadBooks = async () => {
@@ -247,6 +256,87 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     setDetailModalOpen(true);
   };
 
+  // 打开单词提取对话框
+  const openExtractWordsModal = async (book: BookshelfItem) => {
+    setSelectedBook(book);
+    setExtractModalOpen(true);
+    setExtractLoading(true);
+    setSelectedWords([]);
+    
+    try {
+      // 加载已有的熟词
+      const masteredWords = await window.electron.ipcRenderer.invoke('db:getMasteredWords');
+      setExistingMasteredWords(new Set(masteredWords.map((w: string) => w.toLowerCase())));
+      
+      // 读取文件内容
+      const fileResult = await window.electron.ipcRenderer.invoke('file:read', book.filePath);
+      if (fileResult.success) {
+        // 提取所有英文单词
+        const content = fileResult.data || '';
+        const words = extractWordsFromText(content);
+        // 去重并排序
+        const uniqueWords = Array.from(new Set(words)).sort();
+        setExtractedWords(uniqueWords);
+      } else {
+        message.error('读取文件失败');
+        setExtractedWords([]);
+      }
+    } catch (error) {
+      console.error('提取单词失败:', error);
+      message.error('提取单词失败');
+      setExtractedWords([]);
+    } finally {
+      setExtractLoading(false);
+    }
+  };
+
+  // 从文本中提取单词
+  const extractWordsFromText = (text: string): string[] => {
+    const words: string[] = [];
+    // 匹配纯英文单词（4个字母以上，避免过于简单的词）
+    const matches = text.match(/[a-zA-Z]{4,}/g);
+    if (matches) {
+      matches.forEach(word => {
+        const lowerWord = word.toLowerCase();
+        // 过滤纯重复字母和常见无意义组合
+        if (!/^(.)\1+$/.test(lowerWord) && lowerWord.length >= 4 && lowerWord.length <= 20) {
+          words.push(lowerWord);
+        }
+      });
+    }
+    return words;
+  };
+
+  // 添加选中的单词到熟词本
+  const handleAddSelectedWords = async () => {
+    if (selectedWords.length === 0) {
+      message.warning('请先选择单词');
+      return;
+    }
+    
+    let addedCount = 0;
+    let existedCount = 0;
+    
+    for (const word of selectedWords) {
+      try {
+        const result = await window.electron.ipcRenderer.invoke('db:addMasteredWord', word);
+        if (result.success) {
+          if (result.existed) {
+            existedCount++;
+          } else {
+            addedCount++;
+          }
+        }
+      } catch (error) {
+        console.error(`添加单词 ${word} 失败:`, error);
+      }
+    }
+    
+    message.success(`添加完成：新增 ${addedCount} 个，已存在 ${existedCount} 个`);
+    setExtractModalOpen(false);
+    setSelectedWords([]);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -328,7 +418,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                       </div>
                       
                       {/* 操作按钮 */}
-                      <Space size="small">
+                      <Space size="small" wrap>
                         <Button 
                           type="primary" 
                           size="small"
@@ -339,6 +429,16 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                           }}
                         >
                           阅读
+                        </Button>
+                        <Button 
+                          size="small"
+                          icon={<BookOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openExtractWordsModal(book);
+                          }}
+                        >
+                          提取单词
                         </Button>
                         <Button 
                           size="small"
@@ -435,6 +535,99 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* 单词提取模态框 */}
+      <Modal
+        title={`提取单词 - ${selectedBook?.bookName || ''}`}
+        open={extractModalOpen}
+        onCancel={() => {
+          setExtractModalOpen(false);
+          setSelectedWords([]);
+        }}
+        width={700}
+        footer={[
+          <Button 
+            key="cancel" 
+            onClick={() => {
+              setExtractModalOpen(false);
+              setSelectedWords([]);
+            }}
+          >
+            取消
+          </Button>,
+          <Button 
+            key="add" 
+            type="primary" 
+            icon={<CheckCircleOutlined />}
+            disabled={selectedWords.length === 0}
+            onClick={handleAddSelectedWords}
+          >
+            添加到熟词本 ({selectedWords.length})
+          </Button>,
+        ]}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">
+              共提取到 <strong>{extractedWords.length}</strong> 个单词
+            </span>
+            <span className="text-gray-500 text-sm">
+              已选择 {selectedWords.length} 个 | 
+              已在熟词本 {selectedWords.filter(w => existingMasteredWords.has(w)).length} 个
+            </span>
+          </div>
+          
+          {extractLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Spin tip="正在提取单词..." />
+            </div>
+          ) : extractedWords.length === 0 ? (
+            <Empty description="未提取到单词" />
+          ) : (
+            <div className="max-h-[400px] overflow-y-auto border rounded-lg p-4">
+              <List
+                dataSource={extractedWords}
+                renderItem={(word) => {
+                  const isSelected = selectedWords.includes(word);
+                  const isExisting = existingMasteredWords.has(word);
+                  return (
+                    <List.Item
+                      className={`cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedWords(selectedWords.filter(w => w !== word));
+                        } else {
+                          setSelectedWords([...selectedWords, word]);
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          className="w-4 h-4"
+                        />
+                        <span className={`flex-1 ${isExisting ? 'text-green-600' : ''}`}>
+                          {word}
+                          {isExisting && (
+                            <Tag color="green" className="ml-2">已在熟词本</Tag>
+                          )}
+                        </span>
+                      </div>
+                    </List.Item>
+                  );
+                }}
+                pagination={{
+                  pageSize: 50,
+                  showSizeChanger: false,
+                  simple: true,
+                }}
+              />
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   );
