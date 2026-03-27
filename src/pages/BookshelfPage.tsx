@@ -335,6 +335,9 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     message.success(`添加完成：新增 ${addedCount} 个，已存在 ${existedCount} 个`);
     setExtractModalOpen(false);
     setSelectedWords([]);
+    
+    // 触发熟词本刷新事件
+    window.dispatchEvent(new CustomEvent('masteredWordsUpdated'));
   };
 
   if (loading) {

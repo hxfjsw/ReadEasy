@@ -29,6 +29,16 @@ const MasteredWordsPage: React.FC = () => {
 
   useEffect(() => {
     loadMasteredWords();
+    
+    // 监听熟词本更新事件（从其他页面添加单词时触发刷新）
+    const handleRefresh = () => {
+      loadMasteredWords();
+    };
+    window.addEventListener('masteredWordsUpdated', handleRefresh);
+    
+    return () => {
+      window.removeEventListener('masteredWordsUpdated', handleRefresh);
+    };
   }, []);
 
   // 搜索过滤
