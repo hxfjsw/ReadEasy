@@ -70,7 +70,7 @@ export function useReaderAudio(segmentDuration: number = 5) {
           const response = await fetch(`file://${path}`);
           const blob = await response.blob();
           const file = new File([blob], path.split('/').pop() || 'audio.mp3', { type: 'audio/mpeg' });
-          await whisper.initAudioSegments(file);
+          await whisper.initAudioSegments(file, segmentDuration);
           lastTranscribedSegmentRef.current = -1;
         } catch (e) {
           console.error('初始化音频分段失败:', e);
