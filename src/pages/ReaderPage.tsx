@@ -4,19 +4,9 @@ import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOu
 import WordPopup from '../components/WordPopup';
 import { useSettingsStore } from '../stores/settingsStore';
 import { VocabularyLevel } from '../types';
-
-interface Chapter {
-  id: string;
-  title: string;
-  content: string;
-}
-
-interface LoadingState {
-  isLoading: boolean;
-  stage: 'reading' | 'parsing' | 'rendering' | 'analyzing' | 'complete';
-  progress: number;
-  message: string;
-}
+import { useReaderAudio } from '../hooks/useReaderAudio';
+import { splitContentIntoPages, getThemeStyles } from '../utils/readerHelpers';
+import type { Chapter, LoadingState, ReaderPageProps } from '../types/reader';
 
 // 词汇等级顺序（从低到高）
 const levelOrder = [
@@ -31,11 +21,6 @@ const levelOrder = [
   VocabularyLevel.GRE,
   VocabularyLevel.TEM8,
 ];
-
-interface ReaderPageProps {
-  initialFilePath?: string;
-  onClearInitialFile?: () => void;
-}
 
 const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitialFile }) => {
   const [fileContent, setFileContent] = useState<string>('');
@@ -89,13 +74,19 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   // 已掌握单词列表（从用户设置中加载）
   const [knownWords, setKnownWords] = useState<Set<string>>(new Set());
   
-  // 有声书音频播放状态
-  const [audioFile, setAudioFile] = useState<string>('');
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
-  const [audioDuration, setAudioDuration] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // 使用自定义 hooks
+  const {
+    audioFile,
+    isPlayingAudio,
+    audioCurrentTime,
+    audioDuration,
+    handleSelectAudio,
+    toggleAudioPlayback,
+    pauseAudioForInteraction,
+    handleAudioSeek,
+    formatTime,
+    closeAudio,
+  } = useReaderAudio();
   
   // 从全局设置获取词汇水平
   const { vocabularyLevel, customWords } = useSettingsStore();
@@ -108,55 +99,6 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const [totalPages, setTotalPages] = useState<number>(0);
   const [pageContents, setPageContents] = useState<string[]>([]);
   const PAGE_SIZE = 3000; // 每页字符数
-  
-  // 将内容分割成页面
-  const splitContentIntoPages = (content: string, pageSize: number): string[] => {
-    if (!content || content.length <= pageSize) {
-      return [content];
-    }
-    
-    const pages: string[] = [];
-    let startIndex = 0;
-    
-    while (startIndex < content.length) {
-      // 尝试在句子结尾处分割（查找句号、问号、感叹号后的空格或换行）
-      let endIndex = startIndex + pageSize;
-      
-      if (endIndex >= content.length) {
-        // 剩余内容不足一页，直接添加
-        pages.push(content.slice(startIndex));
-        break;
-      }
-      
-      // 查找合适的分割点（优先在段落或句子边界）
-      let splitIndex = endIndex;
-      
-      // 先尝试找段落边界（两个换行符）
-      const paragraphMatch = content.slice(startIndex, endIndex + 200).match(/\n\s*\n/);
-      if (paragraphMatch && paragraphMatch.index) {
-        const paragraphEnd = startIndex + paragraphMatch.index + paragraphMatch[0].length;
-        if (paragraphEnd > startIndex + pageSize * 0.7 && paragraphEnd <= endIndex + 200) {
-          splitIndex = paragraphEnd;
-        }
-      }
-      
-      // 如果没有找到段落边界，尝试在句子边界分割
-      if (splitIndex === endIndex) {
-        const sentenceMatch = content.slice(startIndex, endIndex + 100).match(/[.!?。！？]\s+/);
-        if (sentenceMatch && sentenceMatch.index) {
-          const sentenceEnd = startIndex + sentenceMatch.index + sentenceMatch[0].length;
-          if (sentenceEnd > startIndex + pageSize * 0.7 && sentenceEnd <= endIndex + 100) {
-            splitIndex = sentenceEnd;
-          }
-        }
-      }
-      
-      pages.push(content.slice(startIndex, splitIndex));
-      startIndex = splitIndex;
-    }
-    
-    return pages;
-  };
   
   // 根据当前页码更新当前章节
   const updateCurrentChapterByPage = (pageNum: number) => {
@@ -256,121 +198,6 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       console.error('加载设置失败:', error);
     }
   };
-
-  // 有声书音频相关函数
-  const handleSelectAudio = async () => {
-    try {
-      const result = await window.electron.ipcRenderer.invoke('file:open');
-      if (!result.canceled && result.filePaths.length > 0) {
-        const path = result.filePaths[0];
-        if (!path.toLowerCase().endsWith('.mp3')) {
-          message.error('请选择 MP3 格式的音频文件');
-          return;
-        }
-        setAudioFile(path);
-        
-        // 创建音频对象
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current = null;
-        }
-        
-        const audio = new Audio(`file://${path}`);
-        audio.addEventListener('loadedmetadata', () => {
-          setAudioDuration(audio.duration);
-        });
-        audio.addEventListener('ended', () => {
-          setIsPlayingAudio(false);
-          if (audioProgressIntervalRef.current) {
-            clearInterval(audioProgressIntervalRef.current);
-          }
-        });
-        audio.addEventListener('error', (e) => {
-          console.error('音频加载失败:', e);
-          message.error('音频文件加载失败');
-          setAudioFile('');
-        });
-        
-        audioRef.current = audio;
-        message.success('有声书已加载');
-      }
-    } catch (error) {
-      console.error('选择音频文件失败:', error);
-      message.error('选择音频文件失败');
-    }
-  };
-
-  // 播放/暂停音频
-  const toggleAudioPlayback = () => {
-    if (!audioRef.current) {
-      message.warning('请先选择音频文件');
-      return;
-    }
-
-    if (isPlayingAudio) {
-      audioRef.current.pause();
-      setIsPlayingAudio(false);
-      if (audioProgressIntervalRef.current) {
-        clearInterval(audioProgressIntervalRef.current);
-        audioProgressIntervalRef.current = null;
-      }
-    } else {
-      audioRef.current.play().then(() => {
-        setIsPlayingAudio(true);
-        // 启动进度更新
-        audioProgressIntervalRef.current = setInterval(() => {
-          if (audioRef.current) {
-            setAudioCurrentTime(audioRef.current.currentTime);
-          }
-        }, 1000);
-      }).catch((error) => {
-        console.error('播放失败:', error);
-        message.error('音频播放失败');
-      });
-    }
-  };
-
-  // 暂停音频（用于查词或翻译时）
-  const pauseAudioForInteraction = () => {
-    if (audioRef.current && isPlayingAudio) {
-      audioRef.current.pause();
-      setIsPlayingAudio(false);
-      if (audioProgressIntervalRef.current) {
-        clearInterval(audioProgressIntervalRef.current);
-        audioProgressIntervalRef.current = null;
-      }
-      return true; // 返回true表示确实暂停了
-    }
-    return false;
-  };
-
-  // 处理进度条拖动
-  const handleAudioSeek = (value: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = value;
-      setAudioCurrentTime(value);
-    }
-  };
-
-  // 格式化时间显示
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // 清理音频资源
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      if (audioProgressIntervalRef.current) {
-        clearInterval(audioProgressIntervalRef.current);
-      }
-    };
-  }, []);
 
   const loadKnownWords = async () => {
     try {
@@ -961,31 +788,8 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
     });
   };
 
-  // 获取主题样式
-  const getThemeStyles = () => {
-    switch (theme) {
-      case 'dark':
-        return {
-          bg: 'bg-gray-900',
-          text: 'text-gray-200',
-          container: 'bg-gray-800',
-        };
-      case 'sepia':
-        return {
-          bg: 'bg-[#f4ecd8]',
-          text: 'text-[#5b4636]',
-          container: 'bg-[#fdf6e3]',
-        };
-      default:
-        return {
-          bg: 'bg-gray-100',
-          text: 'text-gray-700',
-          container: 'bg-white',
-        };
-    }
-  };
 
-  const themeStyles = getThemeStyles();
+  const themeStyles = getThemeStyles(theme);
 
   // 渲染带高亮的朗读内容
   const renderHighlightedContent = () => {
@@ -1209,23 +1013,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
                     {formatTime(audioDuration)}
                   </span>
                 </div>
-                <Button
-                  type="text"
-                  size="small"
-                  danger
-                  onClick={() => {
-                    if (audioRef.current) {
-                      audioRef.current.pause();
-                      audioRef.current = null;
-                    }
-                    setAudioFile('');
-                    setIsPlayingAudio(false);
-                    setAudioCurrentTime(0);
-                    setAudioDuration(0);
-                  }}
-                >
-                  关闭
-                </Button>
+                <Button type="text" size="small" danger onClick={closeAudio}>关闭</Button>
               </>
             )}
           </div>

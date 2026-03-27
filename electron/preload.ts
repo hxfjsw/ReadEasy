@@ -3,7 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 // 定义IPC通道类型
 export interface IPCChannels {
   // 文件操作
-  'file:open': () => Promise<{ canceled: boolean; filePaths: string[] }>;
+  'file:open': (options?: { filters?: any[] }) => Promise<{ canceled: boolean; filePaths: string[] }>;
   'file:read': (filePath: string, options?: { maxContentSize?: number }) => Promise<{ success: boolean; data?: string; error?: string; metadata?: any }>;
   
   // 数据库操作 - 用户

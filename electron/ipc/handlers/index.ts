@@ -16,7 +16,7 @@ export function registerIPCHandlers(
   console.log('[IPC] Registering IPC handlers...');
   
   // 文件操作
-  ipcMain.handle('file:open', async () => {
+  ipcMain.handle('file:open', async (_, options?: { filters?: any[] }) => {
     console.log('[IPC] ===========================================');
     console.log('[IPC] file:open called - START');
     console.log('[IPC] ===========================================');
@@ -30,9 +30,9 @@ export function registerIPCHandlers(
       // 尝试不使用父窗口
       console.log('[IPC] file:open calling dialog.showOpenDialog without parent...');
       
-      const options: any = {
+      const dialogOptions: any = {
         properties: ['openFile'],
-        filters: [
+        filters: options?.filters || [
           { name: 'Ebooks', extensions: ['epub', 'mobi', 'txt'] },
           { name: 'EPUB', extensions: ['epub'] },
           { name: 'MOBI', extensions: ['mobi'] },
@@ -41,11 +41,11 @@ export function registerIPCHandlers(
         ],
       };
       
-      console.log('[IPC] file:open options:', JSON.stringify(options));
+      console.log('[IPC] file:open options:', JSON.stringify(dialogOptions));
       
       // 使用 try-catch 包裹，防止卡住
       const result = await Promise.race([
-        dialog.showOpenDialog(options),
+        dialog.showOpenDialog(dialogOptions),
         new Promise<{ canceled: boolean; filePaths: string[] }>((_, reject) => {
           setTimeout(() => reject(new Error('Dialog timeout')), 30000);
         }),
