@@ -115,6 +115,16 @@ const WordPopup: React.FC<WordPopupProps> = ({
     };
   };
 
+  // 自动朗读单词
+  const autoPlayPronunciation = (wordToPlay: string) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(wordToPlay);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.8;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   // 分步获取单词定义
   const fetchDefinitionStepByStep = async () => {
     setLoadingStage('basic');
@@ -133,6 +143,8 @@ const WordPopup: React.FC<WordPopupProps> = ({
         setDetailedDef(fullDef);
         setSource('wordbook');
         setLoadingStage('complete');
+        // 自动朗读
+        autoPlayPronunciation(fullDef.word || word);
         return;
       }
       
@@ -146,6 +158,8 @@ const WordPopup: React.FC<WordPopupProps> = ({
         setBasicDef(basicResult.data);
         setSource('ai');
         setLoadingStage('detailed');
+        // 自动朗读
+        autoPlayPronunciation(basicResult.data?.word || word);
         
         // 3. 获取详细定义（词源、词根等）
         console.log('[WordPopup] 获取详细定义:', word);
