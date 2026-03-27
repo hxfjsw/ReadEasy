@@ -91,6 +91,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
                 knownWords={knownWords}
                 vocabularyAnalysis={vocabularyAnalysis}
                 highlightedSentence={highlightedSentence}
+                similarityThreshold={similarityThreshold}
                 onWordClick={onWordClick}
               />
             </div>
@@ -122,6 +123,7 @@ interface RenderContentProps {
   knownWords: Set<string>;
   vocabularyAnalysis: Map<string, string>;
   highlightedSentence: HighlightedSentence | null;
+  similarityThreshold: number;
   onWordClick: (word: string, context: string) => void;
 }
 
@@ -174,6 +176,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
   knownWords, 
   vocabularyAnalysis, 
   highlightedSentence,
+  similarityThreshold,
   onWordClick 
 }) => {
   // 将文本分割成段落/句子
