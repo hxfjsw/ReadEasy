@@ -585,10 +585,20 @@ export class ParserService {
   private cleanHtmlChunk(html: string): string {
     let text = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-      // 将块级标签转换为换行符，保留段落结构
-      .replace(/<\/(p|div|h[1-6]|li|tr|blockquote)>/gi, '\n')
-      .replace(/<(br\s*\/?|hr\s*\/?)>/gi, '\n')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ');
+    
+    // 第一步：处理内联标签 - 直接移除，不替换为空格，避免分割单词
+    // 内联标签：span, b, i, em, strong, a, font, sup, sub, code, mark, small, u, s, strike
+    const inlineTags = /<(\/?)(span|b|i|em|strong|a|font|sup|sub|code|mark|small|u|s|strike|big|tt|var|kbd|dfn|abbr|cite|q|ins|del|bdo|ruby|rt|rp|wbr)[^>]*>/gi;
+    text = text.replace(inlineTags, '');
+    
+    // 第二步：将块级结束标签转换为换行符
+    text = text
+      .replace(/<\/(p|div|h[1-6]|li|tr|blockquote|pre|section|article|aside|header|footer|main|nav|figure|figcaption|td|th|dt|dd)>/gi, '\n')
+      .replace(/<(br\s*\/?|hr\s*\/?)>/gi, '\n');
+    
+    // 第三步：移除剩余标签（块级开始标签等），替换为空格
+    text = text
       .replace(/<[^>]+>/g, ' ')
       .replace(/&nbsp;/gi, ' ')
       .replace(/&amp;/gi, '&')
