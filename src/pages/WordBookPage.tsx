@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input, Divider } from 'antd';
-import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined, SoundOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined, SoundOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { WordBook, WordBookItem } from '../types';
 
 const WordBookPage: React.FC = () => {
@@ -31,9 +31,27 @@ const WordBookPage: React.FC = () => {
   const loadWordBooks = async () => {
     try {
       const books = await window.electron.ipcRenderer.invoke('db:getWordBooks');
-      setWordBooks(books);
-      if (books.length > 0 && !selectedBookId) {
-        setSelectedBookId(books[0].id);
+      
+      // 过滤掉没有单词的单词本
+      const booksWithWords = [];
+      for (const book of books) {
+        const words = await window.electron.ipcRenderer.invoke('db:getWordsInBook', book.id);
+        if (words.length > 0) {
+          booksWithWords.push(book);
+        }
+      }
+      
+      setWordBooks(booksWithWords);
+      
+      // 如果当前选中的单词本不在列表中，选择第一个
+      if (booksWithWords.length > 0) {
+        const currentBookExists = booksWithWords.some(b => b.id === selectedBookId);
+        if (!currentBookExists) {
+          setSelectedBookId(booksWithWords[0].id);
+        }
+      } else {
+        setSelectedBookId(null);
+        setWords([]);
       }
     } catch (error) {
       message.error('加载单词本失败');
@@ -234,33 +252,48 @@ const WordBookPage: React.FC = () => {
       <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="font-medium text-gray-700">单词本列表</h3>
-          <Button
-            type="primary"
-            size="small"
-            icon={<PlusOutlined />}
-            onClick={() => setCreateModalVisible(true)}
-          >
-            新建
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={loadWordBooks}
+              title="刷新"
+            />
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => setCreateModalVisible(true)}
+            >
+              新建
+            </Button>
+          </div>
         </div>
         <div className="flex-1 overflow-auto">
-          {wordBooks.map((book) => (
-            <div
-              key={book.id}
-              onClick={() => setSelectedBookId(book.id)}
-              className={`p-4 cursor-pointer border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                selectedBookId === book.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <BookOutlined className="text-blue-500" />
-                <span className="font-medium text-gray-800">{book.name}</span>
-              </div>
-              {book.description && (
-                <p className="text-sm text-gray-500 mt-1 truncate">{book.description}</p>
-              )}
+          {wordBooks.length === 0 ? (
+            <div className="p-4 text-center text-gray-400 text-sm">
+              暂无单词本<br/>
+              阅读时收藏单词会自动创建
             </div>
-          ))}
+          ) : (
+            wordBooks.map((book) => (
+              <div
+                key={book.id}
+                onClick={() => setSelectedBookId(book.id)}
+                className={`p-4 cursor-pointer border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                  selectedBookId === book.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <BookOutlined className="text-blue-500" />
+                  <span className="font-medium text-gray-800">{book.name}</span>
+                </div>
+                {book.description && (
+                  <p className="text-sm text-gray-500 mt-1 truncate">{book.description}</p>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
 
