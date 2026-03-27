@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button, message, Tag, Spin, Empty, Drawer, Slider, Select, Tooltip, Progress, Card, Divider } from 'antd';
-import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined, TranslationOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, SoundOutlined, TranslationOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, StopOutlined, LeftOutlined, RightOutlined, CustomerServiceOutlined } from '@ant-design/icons';
 import WordPopup from '../components/WordPopup';
 import { useSettingsStore } from '../stores/settingsStore';
 import { VocabularyLevel } from '../types';
@@ -88,6 +88,14 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   
   // 已掌握单词列表（从用户设置中加载）
   const [knownWords, setKnownWords] = useState<Set<string>>(new Set());
+  
+  // 有声书音频播放状态
+  const [audioFile, setAudioFile] = useState<string>('');
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // 从全局设置获取词汇水平
   const { vocabularyLevel, customWords } = useSettingsStore();
@@ -248,6 +256,121 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       console.error('加载设置失败:', error);
     }
   };
+
+  // 有声书音频相关函数
+  const handleSelectAudio = async () => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('file:open');
+      if (!result.canceled && result.filePaths.length > 0) {
+        const path = result.filePaths[0];
+        if (!path.toLowerCase().endsWith('.mp3')) {
+          message.error('请选择 MP3 格式的音频文件');
+          return;
+        }
+        setAudioFile(path);
+        
+        // 创建音频对象
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+        
+        const audio = new Audio(`file://${path}`);
+        audio.addEventListener('loadedmetadata', () => {
+          setAudioDuration(audio.duration);
+        });
+        audio.addEventListener('ended', () => {
+          setIsPlayingAudio(false);
+          if (audioProgressIntervalRef.current) {
+            clearInterval(audioProgressIntervalRef.current);
+          }
+        });
+        audio.addEventListener('error', (e) => {
+          console.error('音频加载失败:', e);
+          message.error('音频文件加载失败');
+          setAudioFile('');
+        });
+        
+        audioRef.current = audio;
+        message.success('有声书已加载');
+      }
+    } catch (error) {
+      console.error('选择音频文件失败:', error);
+      message.error('选择音频文件失败');
+    }
+  };
+
+  // 播放/暂停音频
+  const toggleAudioPlayback = () => {
+    if (!audioRef.current) {
+      message.warning('请先选择音频文件');
+      return;
+    }
+
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+      if (audioProgressIntervalRef.current) {
+        clearInterval(audioProgressIntervalRef.current);
+        audioProgressIntervalRef.current = null;
+      }
+    } else {
+      audioRef.current.play().then(() => {
+        setIsPlayingAudio(true);
+        // 启动进度更新
+        audioProgressIntervalRef.current = setInterval(() => {
+          if (audioRef.current) {
+            setAudioCurrentTime(audioRef.current.currentTime);
+          }
+        }, 1000);
+      }).catch((error) => {
+        console.error('播放失败:', error);
+        message.error('音频播放失败');
+      });
+    }
+  };
+
+  // 暂停音频（用于查词或翻译时）
+  const pauseAudioForInteraction = () => {
+    if (audioRef.current && isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+      if (audioProgressIntervalRef.current) {
+        clearInterval(audioProgressIntervalRef.current);
+        audioProgressIntervalRef.current = null;
+      }
+      return true; // 返回true表示确实暂停了
+    }
+    return false;
+  };
+
+  // 处理进度条拖动
+  const handleAudioSeek = (value: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = value;
+      setAudioCurrentTime(value);
+    }
+  };
+
+  // 格式化时间显示
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // 清理音频资源
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (audioProgressIntervalRef.current) {
+        clearInterval(audioProgressIntervalRef.current);
+      }
+    };
+  }, []);
 
   const loadKnownWords = async () => {
     try {
@@ -503,6 +626,8 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   // 处理单词点击
   const handleWordClick = useCallback((word: string, context: string) => {
     console.log('[ReaderPage] Word clicked:', word, 'context:', context);
+    // 查词时暂停音频
+    pauseAudioForInteraction();
     setSelectedWord(word);
     setSelectedContext(context);
     setPopupVisible(true);
@@ -511,6 +636,9 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   // 处理句子翻译
   const handleSentenceTranslate = async (text: string, source?: 'google' | 'ai') => {
     if (!text || text.trim().length < 2) return;
+    
+    // 翻译时暂停音频
+    pauseAudioForInteraction();
     
     const useSource = source || sentenceTranslateSource;
     console.log('[ReaderPage] Translating sentence:', text.substring(0, 50) + '...', 'source:', useSource);
@@ -1044,6 +1172,63 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
               {currentPage + 1} / {totalPages} 页
             </span>
           )}
+          
+          {/* 有声书音频控制 */}
+          <div className={`flex items-center gap-2 px-3 py-1 rounded ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}`}>
+            {!audioFile ? (
+              <Button
+                icon={<CustomerServiceOutlined />}
+                size="small"
+                onClick={handleSelectAudio}
+              >
+                有声书
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={isPlayingAudio ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+                  onClick={toggleAudioPlayback}
+                >
+                  {isPlayingAudio ? '暂停' : '播放'}
+                </Button>
+                <div className="flex items-center gap-2" style={{ width: 200 }}>
+                  <span className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {formatTime(audioCurrentTime)}
+                  </span>
+                  <Slider
+                    min={0}
+                    max={audioDuration || 100}
+                    value={audioCurrentTime}
+                    onChange={handleAudioSeek}
+                    tooltip={{ formatter: (value) => formatTime(value || 0) }}
+                    style={{ flex: 1, margin: '0 8px' }}
+                  />
+                  <span className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {formatTime(audioDuration)}
+                  </span>
+                </div>
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  onClick={() => {
+                    if (audioRef.current) {
+                      audioRef.current.pause();
+                      audioRef.current = null;
+                    }
+                    setAudioFile('');
+                    setIsPlayingAudio(false);
+                    setAudioCurrentTime(0);
+                    setAudioDuration(0);
+                  }}
+                >
+                  关闭
+                </Button>
+              </>
+            )}
+          </div>
           
           {/* 全文朗读按钮 */}
           {fileContent && (
