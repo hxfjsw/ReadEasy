@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, List, Card, Empty, Input, message, Popconfirm, Tag, Upload } from 'antd';
+import { Button, List, Card, Empty, Input, message, Popconfirm, Tag, Upload, Pagination } from 'antd';
 import { DeleteOutlined, SearchOutlined, CheckCircleOutlined, PlusOutlined, DownloadOutlined, UploadOutlined, ReloadOutlined } from '@ant-design/icons';
 
 
@@ -10,6 +10,10 @@ const MasteredWordsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [newWord, setNewWord] = useState('');
   const [adding, setAdding] = useState(false);
+  
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
 
   // 加载熟词本
@@ -51,7 +55,15 @@ const MasteredWordsPage: React.FC = () => {
       );
       setFilteredWords(filtered);
     }
+    // 搜索时重置到第一页
+    setCurrentPage(1);
   }, [searchTerm, masteredWords]);
+
+  // 计算当前页数据
+  const paginatedWords = filteredWords.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   // 添加单个单词
   const handleAddWord = async () => {
@@ -249,7 +261,7 @@ const MasteredWordsPage: React.FC = () => {
       </Card>
 
       {/* 单词列表 */}
-      <Card className="flex-1 overflow-hidden">
+      <Card className="flex-1 overflow-hidden flex flex-col">
         {filteredWords.length === 0 ? (
           <Empty
             description={
@@ -260,41 +272,60 @@ const MasteredWordsPage: React.FC = () => {
             className="mt-20"
           />
         ) : (
-          <List
-            loading={loading}
-            dataSource={filteredWords}
-            renderItem={(word) => (
-              <List.Item
-                actions={[
-                  <Popconfirm
-                    key="remove"
-                    title="确定移除？"
-                    description={`将 "${word}" 从熟词本移除，该单词将再次标记为生词。`}
-                    onConfirm={() => handleRemove(word)}
-                    okText="移除"
-                    cancelText="取消"
-                  >
-                    <Button 
-                      type="text" 
-                      danger 
-                      icon={<DeleteOutlined />}
+          <>
+            <List
+              loading={loading}
+              dataSource={paginatedWords}
+              renderItem={(word) => (
+                <List.Item
+                  actions={[
+                    <Popconfirm
+                      key="remove"
+                      title="确定移除？"
+                      description={`将 "${word}" 从熟词本移除，该单词将再次标记为生词。`}
+                      onConfirm={() => handleRemove(word)}
+                      okText="移除"
+                      cancelText="取消"
                     >
-                      移除
-                    </Button>
-                  </Popconfirm>,
-                ]}
-              >
-                <List.Item.Meta
-                  title={<span className="text-lg font-medium">{word}</span>}
-                />
-              </List.Item>
-            )}
-            pagination={{
-              pageSize: 100,
-              showSizeChanger: false,
-              showTotal: (total) => `共 ${total} 个单词`,
-            }}
-          />
+                      <Button 
+                        type="text" 
+                        danger 
+                        icon={<DeleteOutlined />}
+                      >
+                        移除
+                      </Button>
+                    </Popconfirm>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={<span className="text-lg font-medium">{word}</span>}
+                  />
+                </List.Item>
+              )}
+              pagination={false}
+            />
+            {/* 自定义分页 */}
+            <div className="flex justify-center mt-4 pt-4 border-t">
+              <Pagination
+                current={currentPage}
+                pageSize={pageSize}
+                total={filteredWords.length}
+                showSizeChanger
+                showQuickJumper
+                pageSizeOptions={['20', '50', '100', '200']}
+                onChange={(page, size) => {
+                  setCurrentPage(page);
+                  if (size !== pageSize) {
+                    setPageSize(size);
+                    setCurrentPage(1);
+                  }
+                }}
+                showTotal={(total, range) => 
+                  `第 ${range[0]}-${range[1]} 条，共 ${total} 个单词`
+                }
+              />
+            </div>
+          </>
         )}
       </Card>
     </div>
