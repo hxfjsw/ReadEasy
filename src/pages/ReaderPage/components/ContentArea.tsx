@@ -137,6 +137,14 @@ const calculateSimilarity = (str1: string, str2: string): number => {
   
   if (s1 === s2) return 1;
   
+  // 子串匹配：如果一个是另一个的子串，给予高相似度
+  if (s1.includes(s2) || s2.includes(s1)) {
+    const shorter = s1.length < s2.length ? s1 : s2;
+    const longer = s1.length < s2.length ? s2 : s1;
+    // 子串占长串的比例，最低0.5，最高1
+    return 0.5 + (shorter.length / longer.length) * 0.5;
+  }
+  
   const len = Math.max(s1.length, s2.length);
   const distance = levenshteinDistance(s1, s2);
   return (len - distance) / len;
@@ -247,7 +255,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
             // 如果有累积的句子先处理
             if (currentSentence) {
               const shouldHighlight = highlightedSentence !== null && 
-                calculateSimilarity(currentSentence, highlightedSentence.text) >= 0.8;
+                calculateSimilarity(currentSentence, highlightedSentence.text) >= similarityThreshold;
               
               elements.push(
                 <SentenceSpan 
@@ -268,7 +276,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
         // 处理最后剩余的文本
         if (currentSentence.trim()) {
           const shouldHighlight = highlightedSentence !== null && 
-            calculateSimilarity(currentSentence, highlightedSentence.text) >= 0.8;
+            calculateSimilarity(currentSentence, highlightedSentence.text) >= similarityThreshold;
           
           elements.push(
             <SentenceSpan 

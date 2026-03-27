@@ -29,7 +29,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const file = useReaderFile();
   const vocab = useReaderVocabulary();
   const settings = useReaderSettings();
-  const audio = useReaderAudio(settings.segmentDuration);
+  const audio = useReaderAudio(settings.segmentDuration, settings.similarityThreshold);
 
   const [chapterDrawerOpen, setChapterDrawerOpen] = useState(false);
 

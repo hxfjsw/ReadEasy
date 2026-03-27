@@ -10,7 +10,7 @@ export interface HighlightedSentence {
   endTime: number;
 }
 
-export function useReaderAudio(segmentDuration: number = 5) {
+export function useReaderAudio(segmentDuration: number = 5, similarityThreshold: number = 0.5) {
   const [audioFile, setAudioFile] = useState<string>('');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
@@ -132,7 +132,7 @@ export function useReaderAudio(segmentDuration: number = 5) {
     
     if (segment && segment.text) {
       // 查找匹配的句子
-      const match = whisper.findMatchingSentence(segment.text, contentTextRef.current);
+      const match = whisper.findMatchingSentence(segment.text, contentTextRef.current, similarityThreshold);
       
       if (match) {
         console.log(`[Audio] 高亮句子 (相似度 ${(match.similarity * 100).toFixed(1)}%):`, match.sentence);
