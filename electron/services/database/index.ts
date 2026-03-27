@@ -344,7 +344,37 @@ export class DatabaseService {
   }
 
   deleteWordBook(id: number): void {
-    this.db.prepare('DELETE FROM word_books WHERE id = ?').run(id);
+    const db = this.db;
+    
+    // 开启事务
+    const deleteTransaction = db.transaction(() => {
+      // 1. 获取该单词本中所有单词的ID
+      const wordIds = db.prepare(
+        'SELECT word_id FROM word_book_items WHERE word_book_id = ?'
+      ).all(id) as { word_id: number }[];
+      
+      // 2. 删除单词本项关联
+      db.prepare('DELETE FROM word_book_items WHERE word_book_id = ?').run(id);
+      
+      // 3. 删除这些单词（如果它们不在其他单词本中）
+      for (const { word_id } of wordIds) {
+        // 检查该单词是否在其他单词本中
+        const inOtherBooks = db.prepare(
+          'SELECT COUNT(*) as count FROM word_book_items WHERE word_id = ?'
+        ).get(word_id) as { count: number };
+        
+        // 如果不在其他单词本中，则删除单词
+        if (inOtherBooks.count === 0) {
+          db.prepare('DELETE FROM words WHERE id = ?').run(word_id);
+        }
+      }
+      
+      // 4. 删除单词本
+      db.prepare('DELETE FROM word_books WHERE id = ?').run(id);
+    });
+    
+    // 执行事务
+    deleteTransaction();
   }
 
   addWordToBook(
