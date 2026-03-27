@@ -371,30 +371,29 @@ export class ParserService {
     const candidates: Array<{ text: string; priority: number }> = [];
     
     // 匹配各种标题标签（包括带属性的标签）
+    // 使用[\s\S]*?来匹配可能包含换行的内容，然后清理HTML标签
     const headingPatterns = [
-      { pattern: /<h1[^>]*>([^<]*)<\/h1>/i, priority: 10 },
-      { pattern: /<h2[^>]*>([^<]*)<\/h2>/i, priority: 20 },
-      { pattern: /<h3[^>]*>([^<]*)<\/h3>/i, priority: 30 },
-      { pattern: /<h4[^>]*>([^<]*)<\/h4>/i, priority: 40 },
-      { pattern: /<h5[^>]*>([^<]*)<\/h5>/i, priority: 50 },
-      { pattern: /<h6[^>]*>([^<]*)<\/h6>/i, priority: 60 },
-      { pattern: /<title[^>]*>([^<]*)<\/title>/i, priority: 70 },
+      { tag: 'h1', priority: 10 },
+      { tag: 'h2', priority: 20 },
+      { tag: 'h3', priority: 30 },
+      { tag: 'h4', priority: 40 },
+      { tag: 'h5', priority: 50 },
+      { tag: 'h6', priority: 60 },
+      { tag: 'title', priority: 70 },
     ];
     
-    for (const { pattern, priority } of headingPatterns) {
-      // 查找所有匹配（每次创建新正则以避免lastIndex问题）
-      const globalPattern = new RegExp(pattern.source, 'gi');
+    for (const { tag, priority } of headingPatterns) {
+      // 匹配整个标签内容（包括嵌套标签）
+      const pattern = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
       let match;
-      while ((match = globalPattern.exec(headerSlice)) !== null) {
-        const text = match[1].trim();
+      while ((match = pattern.exec(headerSlice)) !== null) {
+        // 清理内部HTML标签，保留文本
+        let text = match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         if (text && text.length > 0 && text.length < 200) {
           candidates.push({ text, priority });
         }
       }
     }
-    
-    // 按优先级排序
-    candidates.sort((a, b) => a.priority - b.priority);
     
     // 选择最佳标题：优先选择通用章节标题（如 "Chapter 1"）
     const genericPatterns = /^(chapter|section|part)\s*\d+/i;
@@ -406,8 +405,9 @@ export class ParserService {
       }
     }
     
-    // 如果没有找到通用标题，使用第一个候选（非通用标题）
+    // 如果没有找到通用标题，使用优先级最高的候选（非通用标题）
     if (!title && candidates.length > 0) {
+      candidates.sort((a, b) => a.priority - b.priority);
       title = candidates[0].text;
     }
     
