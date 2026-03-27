@@ -5,7 +5,7 @@ export function useReaderSettings() {
   const [lineHeight, setLineHeight] = useState<number>(1.8);
   const [theme, setTheme] = useState<'light' | 'dark' | 'sepia'>('light');
   const [segmentDuration, setSegmentDuration] = useState<number>(5);
-  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.2);
+  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.5);
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
 
   useEffect(() => {

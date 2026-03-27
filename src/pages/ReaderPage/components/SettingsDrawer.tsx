@@ -56,7 +56,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
         </div>
         <div>
           <label className="block text-sm font-medium mb-2">相似度阈值: {Math.round(similarityThreshold * 100)}%</label>
-          <Slider min={0.05} max={0.5} step={0.05} value={similarityThreshold} onChange={onSimilarityThresholdChange} />
+          <Slider min={0.05} max={1} step={0.05} value={similarityThreshold} onChange={onSimilarityThresholdChange} />
           <div className="text-xs text-gray-400">匹配文本的最小相似度，越低越容易匹配</div>
         </div>
       </div>
