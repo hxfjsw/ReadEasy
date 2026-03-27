@@ -544,20 +544,7 @@ const WordBookPage: React.FC = () => {
                     </div>
                   )}
                   
-                  {selectedWord.relatedWords && selectedWord.relatedWords.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-purple-200">
-                      <div className="text-xs text-purple-500 mb-1">相关词汇</div>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedWord.relatedWords.map((rw, idx) => (
-                          <div key={idx} className="bg-white px-2 py-1 rounded text-xs">
-                            <span className="font-medium text-gray-800">{rw.word}</span>
-                            <span className="text-gray-400 mx-1">·</span>
-                            <span className="text-gray-500">{rw.meaning}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+
                 </div>
               </>
             )}
