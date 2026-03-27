@@ -289,11 +289,9 @@ const MasteredWordsPage: React.FC = () => {
                 />
               </List.Item>
             )}
-            pagination={{
-              pageSize: 20,
-              showSizeChanger: false,
-              showTotal: (total) => `共 ${total} 个单词`,
-            }}
+            virtual
+            itemHeight={50}
+            height={500}
           />
         )}
       </Card>
