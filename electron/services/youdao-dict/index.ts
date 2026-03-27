@@ -359,9 +359,11 @@ export class YoudaoDictionaryService {
                   if (tran.exam_sents?.sent) {
                     for (const sent of tran.exam_sents.sent.slice(0, 2)) {
                       if (sent.eng_sent) {
-                        const exampleText = sent.chn_sent
-                          ? `${sent.eng_sent}\n${sent.chn_sent}`
-                          : sent.eng_sent;
+                        const engText = this.cleanHtmlTags(sent.eng_sent);
+                        const chnText = sent.chn_sent ? this.cleanHtmlTags(sent.chn_sent) : '';
+                        const exampleText = chnText
+                          ? `${engText}\n${chnText}`
+                          : engText;
                         examples.push(exampleText);
                       }
                     }
@@ -445,7 +447,10 @@ export class YoudaoDictionaryService {
       const sents = data.blng_sents_part['sentence-pair'].slice(0, options.maxExamples);
       for (const sent of sents) {
         if (sent['sentence-eng'] && sent['sentence-translation']) {
-          const exampleText = `${sent['sentence-eng']}\n${sent['sentence-translation']}`;
+          // 清理 HTML 标签
+          const engText = this.cleanHtmlTags(sent['sentence-eng']);
+          const chnText = this.cleanHtmlTags(sent['sentence-translation']);
+          const exampleText = `${engText}\n${chnText}`;
           // 找到最合适的释义添加例句
           for (const def of definitions) {
             if (def.examples.length < options.maxExamples) {
@@ -463,8 +468,8 @@ export class YoudaoDictionaryService {
       for (const sent of data.individual.pastExamSents.slice(0, 3)) {
         if (sent.en && sent.zh) {
           pastExamSents.push({
-            en: sent.en,
-            zh: sent.zh,
+            en: this.cleanHtmlTags(sent.en),
+            zh: this.cleanHtmlTags(sent.zh),
             source: sent.source,
           });
         }
