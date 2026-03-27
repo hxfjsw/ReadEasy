@@ -4,18 +4,6 @@
 import { net } from 'electron';
 
 // 有道 API 响应格式
-export interface YoudaoCollinsEntry {
-  entry: string;
-  phonetic?: string;
-}
-
-export interface YoudaoEntry {
-  phonetic?: string;
-  seeAlso?: string;
-  trs?: Array<{ pos: string; tran: string }>;
-  see?: string;
-}
-
 export interface YoudaoWebTrans {
   key?: string;
   'key-speech'?: string;
@@ -30,6 +18,13 @@ export interface YoudaoResponse {
       'speech'?: string;
       'uk-phone'?: string;
       'us-phone'?: string;
+      // 词形变化
+      wfs?: Array<{
+        wf?: {
+          name?: string;
+          value?: string;
+        };
+      }>;
     };
   };
   // 柯林斯词典
@@ -72,6 +67,9 @@ export interface YoudaoResponse {
   simple?: {
     word?: Array<{
       phone?: string;
+      // 音标和发音
+      'uk-phone'?: string;
+      'us-phone'?: string;
     }>;
   };
   // 同义词
@@ -80,11 +78,58 @@ export interface YoudaoResponse {
       syno?: Array<{ pos: string; ws: string; tran: string }>;
     }>;
   };
+  // 反义词
+  antonym?: {
+    antonyms?: Array<{
+      ant?: Array<{ pos: string; ws: string; tran: string }>;
+    }>;
+  };
+  // 考试类型/难度标签
+  ecExam?: {
+    exam_type?: Array<string>;
+  };
+  // 词频
+  freq?: {
+    items?: Array<{
+      pos?: string;
+      count?: string;
+      rank?: string;
+    }>;
+  };
+  // 专业释义
+  special?: {
+    sum?: string;
+    entries?: Array<{
+      major?: string;
+      entry?: Array<{ value?: string }>;
+    }>;
+  };
+  // 双语例句
+  blng_sents?: {
+    'sentence-pair'?: Array<{
+      sentence?: string;
+      'sentence-translation'?: string;
+    }>;
+  };
+  // 权威例句
+  auth_sents?: {
+    sent?: Array<{
+      speech?: string;
+      corpus?: string;
+    }>;
+  };
+}
+
+// 词形变化
+export interface WordForm {
+  name: string;
+  value: string;
 }
 
 // 内部使用的单词定义格式
 export interface YoudaoWordDefinition {
   word: string;
+  phonetic?: string;
   phoneticUk?: string;
   phoneticUs?: string;
   definitions: {
@@ -94,9 +139,12 @@ export interface YoudaoWordDefinition {
     examples: string[];
   }[];
   level?: string;
+  examTypes?: string[];
+  wordForms?: WordForm[];
   synonyms?: string[];
   antonyms?: string[];
   phrases?: string[];
+  professional?: Array<{ major: string; meanings: string[] }>;
 }
 
 // 配置选项
@@ -206,35 +254,64 @@ export class YoudaoDictionaryService {
   ): YoudaoWordDefinition {
     const definitions: YoudaoWordDefinition['definitions'] = [];
     const allSynonyms: string[] = [];
+    const allAntonyms: string[] = [];
     const phrases: string[] = [];
+    const wordForms: WordForm[] = [];
+    const professional: Array<{ major: string; meanings: string[] }> = [];
 
-    // 提取音标 - 优先从简单释义获取
+    // ========== 提取音标 ==========
+    let phonetic: string | undefined;
     let phoneticUk: string | undefined;
     let phoneticUs: string | undefined;
 
+    // 从 ec 获取音标
     if (data.ec?.word) {
-      phoneticUk = data.ec.word['uk-phone'] || data.ec.word.phone;
-      phoneticUs = data.ec.word['us-phone'] || data.ec.word.phone;
+      phonetic = data.ec.word.phone;
+      phoneticUk = data.ec.word['uk-phone'];
+      phoneticUs = data.ec.word['us-phone'];
     }
 
     // 从 simple 补充音标
-    if (!phoneticUk && data.simple?.word?.[0]?.phone) {
-      phoneticUk = data.simple.word[0].phone;
+    if (data.simple?.word?.[0]) {
+      const simpleWord = data.simple.word[0];
+      phonetic = phonetic || simpleWord.phone;
+      phoneticUk = phoneticUk || simpleWord['uk-phone'];
+      phoneticUs = phoneticUs || simpleWord['us-phone'];
     }
 
-    // 1. 解析柯林斯词典释义（更详细）
+    // 从柯林斯补充音标
+    if (!phonetic && data.collins?.collins_entries?.[0]?.basic_entries?.basic_entry?.[0]?.phonetic) {
+      phonetic = data.collins.collins_entries[0].basic_entries.basic_entry[0].phonetic;
+    }
+
+    // ========== 提取词形变化 ==========
+    if (data.ec?.word?.wfs) {
+      for (const wf of data.ec.word.wfs) {
+        if (wf.wf?.name && wf.wf?.value) {
+          wordForms.push({
+            name: wf.wf.name,
+            value: wf.wf.value,
+          });
+        }
+      }
+    }
+
+    // ========== 提取难度等级/考试类型 ==========
+    const examTypes: string[] = [];
+    if (data.ecExam?.exam_type) {
+      examTypes.push(...data.ecExam.exam_type);
+    }
+    // 根据词频估算难度
+    let level = this.calculateLevel(examTypes, data.freq);
+
+    // ========== 提取柯林斯词典释义 ==========
     if (data.collins?.collins_entries) {
       for (const collinsEntry of data.collins.collins_entries) {
-        // 获取柯林斯音标
-        if (collinsEntry.basic_entries?.basic_entry?.[0]?.phonetic) {
-          if (!phoneticUk) phoneticUk = collinsEntry.basic_entries.basic_entry[0].phonetic;
-        }
-
         if (collinsEntry.entries?.entry) {
           for (const entry of collinsEntry.entries.entry) {
             if (entry.tran_entry) {
               for (const tranEntry of entry.tran_entry) {
-                const pos = tranEntry.pos || '';
+                const pos = this.formatPos(tranEntry.pos);
                 let meaning = tranEntry.tran || tranEntry.def || '';
                 
                 // 清理 HTML 标签
@@ -243,7 +320,7 @@ export class YoudaoDictionaryService {
                 if (meaning) {
                   const examples: string[] = [];
                   
-                  // 提取例句
+                  // 提取柯林斯例句
                   if (tranEntry.exam_sents?.sent) {
                     for (const sent of tranEntry.exam_sents.sent.slice(0, 2)) {
                       if (sent.eng_sent && sent.chn_sent) {
@@ -285,11 +362,11 @@ export class YoudaoDictionaryService {
       }
     }
 
-    // 2. 解析简单释义（如果柯林斯没有）
+    // ========== 提取简单释义（如果柯林斯没有） ==========
     if (definitions.length === 0 && data.ec?.word?.trs) {
       for (const tr of data.ec.word.trs) {
         const meaning = tr.tr?.[0]?.l?.i;
-        const pos = tr.pos || '';
+        const pos = this.formatPos(tr.pos);
         
         if (meaning) {
           const existingDef = definitions.find(d => d.pos === pos);
@@ -306,7 +383,7 @@ export class YoudaoDictionaryService {
       }
     }
 
-    // 3. 网络释义作为备选
+    // ========== 网络释义作为备选 ==========
     if (definitions.length === 0 && data.web_trans?.['web-translation']) {
       const webTrans = data.web_trans['web-translation']
         .map(w => w.key)
@@ -322,42 +399,154 @@ export class YoudaoDictionaryService {
       }
     }
 
-    // 4. 收集短语
-    if (data.phrs?.phrs) {
-      for (const phr of data.phrs.phrs.slice(0, 5)) {
-        if (phr.phr?.headword) {
-          phrases.push(`${phr.phr.headword} ${phr.phr.translation || ''}`.trim());
-        }
-      }
-    }
-
-    // 5. 收集同义词
-    if (data.synonym?.synonyms) {
-      for (const synGroup of data.synonym.synonyms) {
-        if (synGroup.syno) {
-          for (const syn of synGroup.syno) {
-            if (syn.ws) {
-              // 解析同义词（格式：word1 word2 word3）
-              const words = syn.ws.split(/\s+/).filter(w => w && !w.includes('；'));
-              allSynonyms.push(...words.slice(0, 5));
+    // ========== 提取双语例句（补充到第一个释义） ==========
+    if (data.blng_sents?.['sentence-pair']) {
+      for (const sent of data.blng_sents['sentence-pair'].slice(0, 3)) {
+        if (sent.sentence && sent['sentence-translation']) {
+          const exampleText = `${sent.sentence}\n${sent['sentence-translation']}`;
+          // 添加到第一个有例句数组的释义
+          for (const def of definitions) {
+            if (def.examples.length < 3 && !def.examples.includes(exampleText)) {
+              def.examples.push(exampleText);
+              break;
             }
           }
         }
       }
     }
 
-    // 精简每个词性的释义数量
+    // ========== 提取短语 ==========
+    if (data.phrs?.phrs) {
+      for (const phr of data.phrs.phrs.slice(0, 8)) {
+        if (phr.phr?.headword) {
+          const phraseText = phr.phr.translation 
+            ? `${phr.phr.headword}  ${phr.phr.translation}`
+            : phr.phr.headword;
+          phrases.push(phraseText);
+        }
+      }
+    }
+
+    // ========== 提取同义词 ==========
+    if (data.synonym?.synonyms) {
+      for (const synGroup of data.synonym.synonyms) {
+        if (synGroup.syno) {
+          for (const syn of synGroup.syno) {
+            if (syn.ws) {
+              // 解析同义词（格式：word1 word2 word3）
+              const words = syn.ws.split(/\s+/).filter(w => w && !w.includes('；') && !w.includes(';'));
+              allSynonyms.push(...words);
+            }
+          }
+        }
+      }
+    }
+
+    // ========== 提取反义词 ==========
+    if (data.antonym?.antonyms) {
+      for (const antGroup of data.antonym.antonyms) {
+        if (antGroup.ant) {
+          for (const ant of antGroup.ant) {
+            if (ant.ws) {
+              const words = ant.ws.split(/\s+/).filter(w => w && !w.includes('；') && !w.includes(';'));
+              allAntonyms.push(...words);
+            }
+          }
+        }
+      }
+    }
+
+    // ========== 提取专业释义 ==========
+    if (data.special?.entries) {
+      for (const entry of data.special.entries.slice(0, 3)) {
+        if (entry.major && entry.entry) {
+          const meanings = entry.entry
+            .map(e => e.value)
+            .filter(Boolean)
+            .map(v => this.cleanHtmlTags(v!));
+          if (meanings.length > 0) {
+            professional.push({
+              major: entry.major,
+              meanings: meanings.slice(0, 2),
+            });
+          }
+        }
+      }
+    }
+
+    // ========== 精简每个词性的释义数量 ==========
     const limitedDefinitions = this.limitDefinitions(definitions, options.maxDefinitionsPerPos);
 
     return {
       word,
+      phonetic,
       phoneticUk,
       phoneticUs,
       definitions: limitedDefinitions,
-      synonyms: Array.from(new Set(allSynonyms)).slice(0, 5),
-      antonyms: [],
-      phrases: phrases.slice(0, 5),
+      level,
+      examTypes: examTypes.slice(0, 5),
+      wordForms: wordForms.slice(0, 6),
+      synonyms: Array.from(new Set(allSynonyms)).slice(0, 8),
+      antonyms: Array.from(new Set(allAntonyms)).slice(0, 5),
+      phrases: phrases.slice(0, 8),
+      professional: professional.slice(0, 3),
     };
+  }
+
+  /**
+   * 格式化词性
+   */
+  private formatPos(pos?: string): string {
+    if (!pos) return '';
+    
+    const posMap: Record<string, string> = {
+      'n.': 'n.',
+      'v.': 'v.',
+      'adj.': 'adj.',
+      'adv.': 'adv.',
+      'pron.': 'pron.',
+      'prep.': 'prep.',
+      'conj.': 'conj.',
+      'int.': 'int.',
+      'det.': 'det.',
+      'modal': 'modal',
+      'abbr.': 'abbr.',
+      'num.': 'num.',
+      'art.': 'art.',
+    };
+
+    // 标准化词性格式
+    let normalizedPos = pos.toLowerCase().trim();
+    if (!normalizedPos.endsWith('.') && normalizedPos.length > 1) {
+      normalizedPos += '.';
+    }
+
+    return posMap[normalizedPos] || pos;
+  }
+
+  /**
+   * 根据考试类型和词频计算难度等级
+   */
+  private calculateLevel(examTypes: string[], freq?: YoudaoResponse['freq']): string {
+    // 根据考试类型判断难度
+    if (examTypes.length > 0) {
+      // 按难度排序
+      const levelOrder = ['中考', '高考', '四级', '六级', '考研', '雅思', '托福', 'GRE', '专四', '专八'];
+      for (const level of levelOrder.reverse()) {
+        if (examTypes.some(t => t.includes(level))) {
+          return level;
+        }
+      }
+      return examTypes[0];
+    }
+
+    // 根据词频估算（如果有）
+    if (freq?.items && freq.items.length > 0) {
+      // 这里可以根据词频数据估算，但有道的词频数据格式不明确
+      // 暂不处理
+    }
+
+    return '';
   }
 
   /**

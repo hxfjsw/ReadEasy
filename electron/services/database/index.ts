@@ -15,12 +15,13 @@ export class DatabaseService {
     // 在用户数据目录创建数据库
     const userDataPath = app.getPath('userData');
     const dbDir = path.join(userDataPath, 'database');
-    
+
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
-    
+
     this.dbPath = path.join(dbDir, 'readeasy.db');
+    console.log("dbPath",this.dbPath)
     this.db = new Database(this.dbPath);
 
   }
@@ -28,7 +29,7 @@ export class DatabaseService {
   async initialize(): Promise<void> {
     // 创建表
     this.createTables();
-    
+
     // 初始化默认数据
     await this.initializeDefaultData();
   }
@@ -148,25 +149,25 @@ export class DatabaseService {
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_word_book_items_book_id ON word_book_items(word_book_id)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_reading_records_path ON reading_records(file_path)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_mastered_words_word ON mastered_words(word)`);
-    
+
     // 迁移：为 word_book_items 添加复习相关字段
     this.migrateWordBookItems();
-    
+
     // 迁移：为 ai_configs 添加翻译相关字段
     this.migrateAIConfigs();
-    
+
     // 迁移：为 words 表添加扩展字段
     this.migrateWords();
   }
-  
+
   private migrateWords(): void {
     // 检查是否需要添加扩展字段
     const tableInfo = this.db.prepare(`PRAGMA table_info(words)`).all() as any[];
-    
+
     const hasEtymology = tableInfo.some(col => col.name === 'etymology');
     const hasRootAnalysis = tableInfo.some(col => col.name === 'root_analysis');
     const hasRelatedWords = tableInfo.some(col => col.name === 'related_words');
-    
+
     if (!hasEtymology) {
       this.db.exec(`ALTER TABLE words ADD COLUMN etymology TEXT`);
     }
@@ -181,11 +182,11 @@ export class DatabaseService {
   private migrateAIConfigs(): void {
     // 检查是否需要添加翻译相关字段
     const tableInfo = this.db.prepare(`PRAGMA table_info(ai_configs)`).all() as any[];
-    
+
     const hasSourceLanguage = tableInfo.some(col => col.name === 'source_language');
     const hasTargetLanguage = tableInfo.some(col => col.name === 'target_language');
     const hasCustomPrompt = tableInfo.some(col => col.name === 'custom_prompt');
-    
+
     if (!hasSourceLanguage) {
       this.db.exec(`ALTER TABLE ai_configs ADD COLUMN source_language TEXT DEFAULT 'en'`);
     }
@@ -196,19 +197,19 @@ export class DatabaseService {
       this.db.exec(`ALTER TABLE ai_configs ADD COLUMN custom_prompt TEXT`);
     }
   }
-  
+
   private migrateWordBookItems(): void {
     // 检查是否需要添加 review_stage 列
     const tableInfo = this.db.prepare(`PRAGMA table_info(word_book_items)`).all() as any[];
     const hasReviewStage = tableInfo.some(col => col.name === 'review_stage');
     const hasContextAnalysis = tableInfo.some(col => col.name === 'context_analysis');
-    
+
     if (!hasReviewStage) {
       this.db.exec(`ALTER TABLE word_book_items ADD COLUMN review_stage INTEGER NOT NULL DEFAULT 0`);
       this.db.exec(`ALTER TABLE word_book_items ADD COLUMN last_reviewed_at INTEGER`);
       this.db.exec(`ALTER TABLE word_book_items ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0`);
     }
-    
+
     if (!hasContextAnalysis) {
       this.db.exec(`ALTER TABLE word_book_items ADD COLUMN context_analysis TEXT`);
       this.db.exec(`ALTER TABLE word_book_items ADD COLUMN context_translation TEXT`);
@@ -272,13 +273,13 @@ export class DatabaseService {
   updateUser(id: number, data: Partial<schema.NewUser>): void {
     const sets: string[] = [];
     const values: any[] = [];
-    
+
     for (const [key, value] of Object.entries(data)) {
       sets.push(`${key} = ?`);
       values.push(value);
     }
     values.push(id);
-    
+
     this.db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...values);
   }
 
@@ -294,7 +295,7 @@ export class DatabaseService {
       console.log('[DB] Word already exists:', data.word, 'id:', existing.id);
       return existing.id;
     }
-    
+
     const result = this.db.prepare(`
       INSERT INTO words (word, phonetic_uk, phonetic_us, definition_cn, definition_en, level, frequency, source, etymology, root_analysis, related_words)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -347,8 +348,8 @@ export class DatabaseService {
   }
 
   addWordToBook(
-    wordBookId: number, 
-    wordId: number, 
+    wordBookId: number,
+    wordId: number,
     context?: string,
     contextAnalysis?: string,
     contextTranslation?: string
@@ -372,13 +373,13 @@ export class DatabaseService {
     `).run(wordBookId, wordId);
   }
 
-  getWordsInBook(wordBookId: number): (schema.Word & { 
-    context?: string; 
+  getWordsInBook(wordBookId: number): (schema.Word & {
+    context?: string;
     contextAnalysis?: string;
     contextTranslation?: string;
-    addedAt: Date; 
-    reviewStage?: number; 
-    lastReviewedAt?: Date; 
+    addedAt: Date;
+    reviewStage?: number;
+    lastReviewedAt?: Date;
     reviewCount?: number;
     etymology?: string;
     rootAnalysis?: any;
@@ -395,18 +396,18 @@ export class DatabaseService {
       WHERE wbi.word_book_id = ?
       ORDER BY wbi.added_at DESC
     `).all(wordBookId) as any[];
-    
+
     // 解析 JSON 字段
     const result = rows.map(row => ({
       ...row,
       rootAnalysis: row.root_analysis ? JSON.parse(row.root_analysis) : undefined,
       relatedWords: row.related_words ? JSON.parse(row.related_words) : undefined,
     }));
-    
+
     console.log('[DB] getWordsInBook result:', result?.length || 0, 'items');
     return result;
   }
-  
+
   // 更新单词复习状态
   updateWordReview(wordBookItemId: number): void {
     this.db.prepare(`
@@ -417,12 +418,12 @@ export class DatabaseService {
       WHERE id = ?
     `).run(wordBookItemId);
   }
-  
+
   // 获取需要复习的单词
   getWordsDueForReview(): any[] {
     // 艾宾浩斯遗忘曲线复习间隔（天数）
     const intervals = [1, 2, 4, 7, 15, 30];
-    
+
     return this.db.prepare(`
       SELECT w.*, wbi.id as itemId, wbi.word_book_id as wordBookId, 
              wbi.review_stage, wbi.added_at, wbi.last_reviewed_at
@@ -440,7 +441,7 @@ export class DatabaseService {
   }
 
   // AI配置相关操作
-  
+
   // 将数据库的 snake_case 字段映射为 camelCase
   private mapAIConfigFromDB(row: any): schema.AIConfig {
     if (!row) return undefined as any;
@@ -488,23 +489,23 @@ export class DatabaseService {
       data.targetLanguage || 'zh-CN',
       data.customPrompt || null
     );
-    
+
     const id = Number(result.lastInsertRowid);
-    
+
     // 如果设置为默认，取消其他默认配置
     if (data.isDefault) {
       this.db.prepare(`
         UPDATE ai_configs SET is_default = 0 WHERE id != ?
       `).run(id);
     }
-    
+
     return id;
   }
 
   updateAIConfig(id: number, data: Partial<schema.NewAIConfig>): void {
     const sets: string[] = [];
     const values: any[] = [];
-    
+
     for (const [key, value] of Object.entries(data)) {
       const dbKey = key.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
       sets.push(`${dbKey} = ?`);
@@ -516,9 +517,9 @@ export class DatabaseService {
       }
     }
     values.push(id);
-    
+
     this.db.prepare(`UPDATE ai_configs SET ${sets.join(', ')} WHERE id = ?`).run(...values);
-    
+
     // 如果设置为默认，取消其他默认配置
     if (data.isDefault) {
       this.db.prepare(`
@@ -535,13 +536,13 @@ export class DatabaseService {
   getReadingRecords(): schema.ReadingRecord[] {
     const rawRecords = this.db.prepare('SELECT * FROM reading_records ORDER BY last_read_at DESC').all();
     console.log('[DB] getReadingRecords raw:', rawRecords.length, 'records');
-    
+
     // 打印第一条记录的原始字段名，用于调试
     if (rawRecords.length > 0) {
       console.log('[DB] First record raw keys:', Object.keys(rawRecords[0] as object));
       console.log('[DB] First record raw:', JSON.stringify(rawRecords[0], null, 2));
     }
-    
+
     const records = rawRecords.map((r: any) => ({
       id: r.id,
       bookName: r.book_name,
@@ -552,7 +553,7 @@ export class DatabaseService {
       bookmarks: r.bookmarks,
       lastReadAt: r.last_read_at,
     })) as schema.ReadingRecord[];
-    
+
     records.forEach((r, i) => {
       console.log(`[DB] Record ${i}: id=${r.id}, name=${r.bookName}, path=${r.filePath}, currentPosition=${r.currentPosition}`);
     });
@@ -577,10 +578,10 @@ export class DatabaseService {
   addOrUpdateReadingRecord(data: schema.NewReadingRecord): void {
     console.log('[DB] addOrUpdateReadingRecord:', data.filePath);
     const existing = this.getReadingRecord(data.filePath);
-    
+
     // 确保 bookmarks 有默认值
     const bookmarks = (data as any).bookmarks ?? existing?.bookmarks ?? '[]';
-    
+
     if (existing) {
       console.log('[DB] Updating existing record:', existing.id);
       this.db.prepare(`
@@ -617,7 +618,7 @@ export class DatabaseService {
   }
 
   // 熟词本相关操作
-  
+
   // 添加熟词
   addMasteredWord(word: string): { success: boolean; id?: number; existed?: boolean } {
     try {
@@ -626,26 +627,26 @@ export class DatabaseService {
         VALUES (?, unixepoch())
         ON CONFLICT(word) DO UPDATE SET added_at = unixepoch()
       `).run(word.toLowerCase().trim());
-      
+
       console.log('[DB] addMasteredWord:', word, 'id:', result.lastInsertRowid);
-      return { 
-        success: true, 
+      return {
+        success: true,
         id: Number(result.lastInsertRowid),
-        existed: result.changes === 0 
+        existed: result.changes === 0
       };
     } catch (error) {
       console.error('[DB] addMasteredWord error:', error);
       return { success: false };
     }
   }
-  
+
   // 删除熟词
   removeMasteredWord(word: string): boolean {
     try {
       const result = this.db.prepare(`
         DELETE FROM mastered_words WHERE word = ?
       `).run(word.toLowerCase().trim());
-      
+
       console.log('[DB] removeMasteredWord:', word, 'changes:', result.changes);
       return result.changes > 0;
     } catch (error) {
@@ -653,31 +654,31 @@ export class DatabaseService {
       return false;
     }
   }
-  
+
   // 查询是否是熟词
   isMasteredWord(word: string): boolean {
     const result = this.db.prepare(`
       SELECT 1 FROM mastered_words WHERE word = ?
     `).get(word.toLowerCase().trim());
-    
+
     return !!result;
   }
-  
+
   // 获取所有熟词
   getMasteredWords(): string[] {
     const rows = this.db.prepare(`
       SELECT word FROM mastered_words ORDER BY added_at DESC
     `).all() as { word: string }[];
-    
+
     return rows.map(r => r.word);
   }
-  
+
   // 获取熟词数量
   getMasteredWordCount(): number {
     const result = this.db.prepare(`
       SELECT COUNT(*) as count FROM mastered_words
     `).get() as { count: number };
-    
+
     return result?.count || 0;
   }
 
