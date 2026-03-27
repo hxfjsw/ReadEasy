@@ -52,6 +52,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   const [extractLoading, setExtractLoading] = useState(false);
   const [extractedWords, setExtractedWords] = useState<string[]>([]);
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
+  const [excludedCount, setExcludedCount] = useState(0);
   
   // 单词查询弹窗状态
   const [wordPopupVisible, setWordPopupVisible] = useState(false);
@@ -279,19 +280,26 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         // 提取所有英文单词
         const content = fileResult.data || '';
         const words = extractWordsFromText(content);
-        // 去重并过滤掉熟词本中的单词
-        const uniqueWords = Array.from(new Set(words))
+        // 去重
+        const allUniqueWords = Array.from(new Set(words));
+        // 计算排除的熟词数量
+        const filteredCount = allUniqueWords.filter(word => masteredSet.has(word)).length;
+        setExcludedCount(filteredCount);
+        // 过滤掉熟词本中的单词
+        const uniqueWords = allUniqueWords
           .filter(word => !masteredSet.has(word))
           .sort();
         setExtractedWords(uniqueWords);
       } else {
         message.error('读取文件失败');
         setExtractedWords([]);
+        setExcludedCount(0);
       }
     } catch (error) {
       console.error('提取单词失败:', error);
       message.error('提取单词失败');
       setExtractedWords([]);
+      setExcludedCount(0);
     } finally {
       setExtractLoading(false);
     }
@@ -586,7 +594,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-600">
-              共提取到 <strong>{extractedWords.length}</strong> 个单词（已自动排除熟词本中的单词）
+              共提取到 <strong>{extractedWords.length}</strong> 个单词（已自动排除熟词本中的 {excludedCount} 个单词）
             </span>
             <span className="text-gray-500 text-sm">
               已选择 {selectedWords.length} 个
