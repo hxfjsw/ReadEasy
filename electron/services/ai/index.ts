@@ -426,10 +426,10 @@ You MUST provide:
 
     return `Please provide a detailed definition for the word "${word}".${contextSection}
 
-You MUST also provide etymology analysis including:
-1. etymology: The origin and history of the word
-2. rootAnalysis: Break down the word into its root(s), prefix, and suffix with explanations
-3. relatedWords: List 3-5 words that share the same root or are etymologically related
+You MUST also provide etymology analysis in CHINESE (中文) including:
+1. etymology: The origin and history of the word explained in Chinese
+2. rootAnalysis: Break down the word into its root(s), prefix, and suffix with explanations in Chinese
+3. relatedWords: List 3-5 words that share the same root or are etymologically related, with meanings in Chinese
 
 IMPORTANT: Return ONLY a valid JSON object in the following format, without any markdown formatting or extra text:
 {
@@ -447,15 +447,15 @@ IMPORTANT: Return ONLY a valid JSON object in the following format, without any 
   "level": "vocabulary level (elementary, middle, high, cet4, cet6, postgraduate, ielts, toefl, gre, tem8)",
   "synonyms": ["synonym1", "synonym2"],
   "antonyms": ["antonym1", "antonym2"],
-  "etymology": "Origin and history of the word (e.g., from Latin/Greek/French...)",
+  "etymology": "词源解释，用中文说明单词的起源和历史（如：来自拉丁语/希腊语/法语等）",
   "rootAnalysis": {
-    "prefix": {"value": "prefix part", "meaning": "meaning of prefix"},
-    "root": {"value": "root part", "meaning": "meaning of root", "origin": "Latin/Greek/etc"},
-    "suffix": {"value": "suffix part", "meaning": "meaning of suffix"},
-    "explanation": "How the parts combine to form the word meaning"
+    "prefix": {"value": "前缀", "meaning": "前缀的中文含义解释"},
+    "root": {"value": "词根", "meaning": "词根的中文含义解释", "origin": "词根来源语言（如：拉丁语、希腊语等）"},
+    "suffix": {"value": "后缀", "meaning": "后缀的中文含义解释"},
+    "explanation": "用中文解释这些部分如何组合形成单词的含义"
   },
   "relatedWords": [
-    {"word": "related word 1", "meaning": "brief meaning", "relation": "shares same root/prefix/etc"}
+    {"word": "related word 1", "meaning": "中文释义", "relation": "中文说明关联（如：共享相同词根/前缀等）"}
   ]${contextFields}
 }`;
   }
@@ -501,22 +501,22 @@ You MUST provide:
 
     return `Please provide detailed etymology and root analysis for the word "${word}".${contextSection}
 
-You MUST provide:
-1. etymology: The origin and history of the word
-2. rootAnalysis: Break down the word into its root(s), prefix, and suffix with explanations
-3. relatedWords: List 3-5 words that share the same root or are etymologically related
+You MUST provide in CHINESE (中文):
+1. etymology: The origin and history of the word explained in Chinese
+2. rootAnalysis: Break down the word into its root(s), prefix, and suffix with explanations in Chinese
+3. relatedWords: List 3-5 words that share the same root or are etymologically related, with meanings in Chinese
 
 IMPORTANT: Return ONLY a valid JSON object in the following format, without any markdown formatting or extra text:
 {
-  "etymology": "Origin and history of the word (e.g., from Latin/Greek/French...)",
+  "etymology": "词源解释，用中文说明单词的起源和历史（如：来自拉丁语/希腊语/法语等）",
   "rootAnalysis": {
-    "prefix": {"value": "prefix part", "meaning": "meaning of prefix"},
-    "root": {"value": "root part", "meaning": "meaning of root", "origin": "Latin/Greek/etc"},
-    "suffix": {"value": "suffix part", "meaning": "meaning of suffix"},
-    "explanation": "How the parts combine to form the word meaning"
+    "prefix": {"value": "前缀", "meaning": "前缀的中文含义解释"},
+    "root": {"value": "词根", "meaning": "词根的中文含义解释", "origin": "词根来源语言（如：拉丁语、希腊语等）"},
+    "suffix": {"value": "后缀", "meaning": "后缀的中文含义解释"},
+    "explanation": "用中文解释这些部分如何组合形成单词的含义"
   },
   "relatedWords": [
-    {"word": "related word 1", "meaning": "brief meaning", "relation": "shares same root/prefix/etc"}
+    {"word": "related word 1", "meaning": "中文释义", "relation": "中文说明关联（如：共享相同词根/前缀等）"}
   ]${contextFields}
 }`;
   }
