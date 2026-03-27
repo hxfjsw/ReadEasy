@@ -52,7 +52,6 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   const [extractLoading, setExtractLoading] = useState(false);
   const [extractedWords, setExtractedWords] = useState<string[]>([]);
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
-  const [existingMasteredWords, setExistingMasteredWords] = useState<Set<string>>(new Set());
   
   // 单词查询弹窗状态
   const [wordPopupVisible, setWordPopupVisible] = useState(false);
@@ -270,10 +269,9 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     setSelectedWords([]);
     
     try {
-      // 加载已有的熟词
+      // 加载已有的熟词并过滤
       const masteredWords = await window.electron.ipcRenderer.invoke('db:getMasteredWords');
       const masteredSet = new Set(masteredWords.map((w: string) => w.toLowerCase()));
-      setExistingMasteredWords(masteredSet);
       
       // 读取文件内容
       const fileResult = await window.electron.ipcRenderer.invoke('file:read', book.filePath);
