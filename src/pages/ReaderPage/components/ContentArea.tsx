@@ -139,7 +139,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
         // 处理普通行
         const parts = line.split(/(\s+|[.,!?;:"()[\]{}])/);
         return (
-          <div key={`line-${lineIndex}`} className="min-h-[1.5em]">
+          <p key={`line-${lineIndex}`} className="my-0 leading-relaxed">
             {parts.map((part, index) => {
               if (!/^[a-zA-Z]+$/.test(part)) return <span key={index}>{part}</span>;
               
@@ -167,7 +167,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
                 </Tooltip>
               );
             })}
-          </div>
+          </p>
         );
       })}
     </>
