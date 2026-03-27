@@ -165,6 +165,23 @@ export class ParserService {
               continue;
             }
             
+            // 过滤空内容或只有图片的章节
+            const hasImages = /<img[^>]+src=/i.test(chapterContent);
+            const imageCount = (chapterContent.match(/<img[^>]+src=/gi) || []).length;
+            const textLength = cleanContent.replace(/\[封面图片\]/g, '').trim().length;
+            
+            // 如果内容太短（少于100字符）且主要是图片，跳过该章节
+            if (textLength < 100 && (hasImages || imageCount > 0)) {
+              console.log(`[Parser] Skipping image-only chapter: ${chapterTitle || spineItem} (text: ${textLength} chars, images: ${imageCount})`);
+              continue;
+            }
+            
+            // 如果内容为空或只有空白字符，跳过该章节
+            if (textLength < 50) {
+              console.log(`[Parser] Skipping empty chapter: ${chapterTitle || spineItem} (text: ${textLength} chars)`);
+              continue;
+            }
+            
             // 检查总内容大小限制
             if (totalContentSize + cleanContent.length > maxContentSize) {
               console.warn('[Parser] Total content size limit reached, stopping');
