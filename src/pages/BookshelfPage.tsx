@@ -25,6 +25,7 @@ import {
 } from '@ant-design/icons';
 import type { ReadingRecord } from '../types';
 import WordPopup from '../components/WordPopup';
+import { lemmatize } from 'wink-lemmatizer';
 
 interface BookshelfItem extends ReadingRecord {
   id: number;
@@ -315,7 +316,9 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         const lowerWord = word.toLowerCase();
         // 过滤纯重复字母和常见无意义组合
         if (!/^(.)\1+$/.test(lowerWord) && lowerWord.length >= 4 && lowerWord.length <= 20) {
-          words.push(lowerWord);
+          // 使用 lemmatizer 还原单词原型
+          const lemma = lemmatize(lowerWord);
+          words.push(lemma);
         }
       });
     }
