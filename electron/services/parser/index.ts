@@ -151,6 +151,20 @@ export class ParserService {
           try {
             const { title: chapterTitle, content: cleanContent } = this.parseChapter(chapterContent);
             
+            // 过滤封面章节
+            const titleLower = (chapterTitle || '').toLowerCase();
+            const spineIdLower = spineItem.toLowerCase();
+            const isCover = 
+              titleLower.includes('cover') ||
+              titleLower.includes('封面') ||
+              titleLower.includes('title page') ||
+              spineIdLower.includes('cover');
+            
+            if (isCover) {
+              console.log(`[Parser] Skipping cover chapter: ${chapterTitle || spineItem}`);
+              continue;
+            }
+            
             // 检查总内容大小限制
             if (totalContentSize + cleanContent.length > maxContentSize) {
               console.warn('[Parser] Total content size limit reached, stopping');
@@ -349,21 +363,59 @@ export class ParserService {
     // 对于超大章节，使用分段处理
     const maxProcessSize = 500 * 1024; // 500KB
     
-    // 提取标题（只在前10KB中查找以提高性能）
+    // 提取标题（只在前20KB中查找以提高性能）
     let title: string | null = null;
-    const headerSlice = html.slice(0, 10000);
-    const titlePatterns = [
-      /<title[^>]*>([^<]*)<\/title>/i,
-      /<h1[^>]*>([^<]*)<\/h1>/i,
-      /<h2[^>]*>([^<]*)<\/h2>/i,
+    const headerSlice = html.slice(0, 20000);
+    
+    // 首先尝试提取所有可能的标题，按优先级排序
+    const candidates: Array<{ text: string; priority: number }> = [];
+    
+    // 匹配各种标题标签（包括带属性的标签）
+    const headingPatterns = [
+      { pattern: /<h1[^>]*>([^<]*)<\/h1>/i, priority: 10 },
+      { pattern: /<h2[^>]*>([^<]*)<\/h2>/i, priority: 20 },
+      { pattern: /<h3[^>]*>([^<]*)<\/h3>/i, priority: 30 },
+      { pattern: /<h4[^>]*>([^<]*)<\/h4>/i, priority: 40 },
+      { pattern: /<h5[^>]*>([^<]*)<\/h5>/i, priority: 50 },
+      { pattern: /<h6[^>]*>([^<]*)<\/h6>/i, priority: 60 },
+      { pattern: /<title[^>]*>([^<]*)<\/title>/i, priority: 70 },
     ];
-    for (const pattern of titlePatterns) {
-      const match = headerSlice.match(pattern);
-      if (match && match[1].trim()) {
-        title = match[1].trim();
+    
+    for (const { pattern, priority } of headingPatterns) {
+      // 查找所有匹配（每次创建新正则以避免lastIndex问题）
+      const globalPattern = new RegExp(pattern.source, 'gi');
+      let match;
+      while ((match = globalPattern.exec(headerSlice)) !== null) {
+        const text = match[1].trim();
+        if (text && text.length > 0 && text.length < 200) {
+          candidates.push({ text, priority });
+        }
+      }
+    }
+    
+    // 按优先级排序
+    candidates.sort((a, b) => a.priority - b.priority);
+    
+    // 选择最佳标题：优先选择通用章节标题（如 "Chapter 1"）
+    const genericPatterns = /^(chapter|section|part)\s*\d+/i;
+    for (const candidate of candidates) {
+      // 如果是通用标题（如 "Chapter 1"），优先使用
+      if (genericPatterns.test(candidate.text)) {
+        title = candidate.text;
         break;
       }
     }
+    
+    // 如果没有找到通用标题，使用第一个候选（非通用标题）
+    if (!title && candidates.length > 0) {
+      title = candidates[0].text;
+    }
+    
+    // 检测是否主要是图片内容（Cover页面或图片章节）
+    const hasImages = /<img[^>]+src=/i.test(html);
+    const imageCount = (html.match(/<img[^>]+src=/gi) || []).length;
+    const textContent = html.replace(/<[^>]+>/g, '').trim();
+    const isMainlyImages = hasImages && (textContent.length < 100 || imageCount > 0);
     
     // 移除 HTML 标签 - 使用更高效的方式
     let text: string;
@@ -380,14 +432,19 @@ export class ParserService {
       text = this.cleanHtmlChunk(html);
     }
     
-    return { title, content: text };
+    // 如果内容主要是图片且文本很少，添加提示
+    if (isMainlyImages && text.trim().length < 50) {
+      text = text.trim() + '\n\n[封面图片]';
+    }
+    
+    return { title, content: text.trim() };
   }
   
   /**
-   * 清理 HTML 片段
+   * 清理 HTML 片段，并将每句话单独分段
    */
   private cleanHtmlChunk(html: string): string {
-    return html
+    let text = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
@@ -399,5 +456,13 @@ export class ParserService {
       .replace(/&#39;/gi, "'")
       .replace(/\s+/g, ' ')
       .trim();
+    
+    // 将每句话单独分段（在句子结尾后添加换行）
+    // 匹配中英文句号、问号、感叹号
+    text = text
+      .replace(/([.!?。！？])(\s+)(?=[A-Z"'"\u4e00-\u9fa5])/g, '$1\n\n')
+      .replace(/([.!?。！？])$/gm, '$1\n\n');
+    
+    return text;
   }
 }
