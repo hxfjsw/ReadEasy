@@ -140,6 +140,7 @@ export interface MatchResult {
  * @param contentText 原文内容
  * @param similarityThreshold 相似度阈值
  * @param windowTolerance 窗口大小容忍度（允许原文比识别多多少词）
+ * @returns 返回匹配结果，包含原始文本中的实际内容
  */
 export function findBestMatch(
   transcription: string,
@@ -169,8 +170,10 @@ export function findBestMatch(
       
       if (score > bestScore) {
         bestScore = score;
+        // 获取原始文本中对应位置的实际内容（保留大小写和格式）
+        const originalText = getOriginalTextFromRange(contentText, i, i + windowSize);
         bestMatch = {
-          text: candidate.join(' '),
+          text: originalText,
           similarity: score,
           startIndex: i,
           endIndex: i + windowSize
@@ -180,6 +183,33 @@ export function findBestMatch(
   }
   
   return bestMatch;
+}
+
+/**
+ * 从原始文本中提取指定单词范围的实际文本
+ * 保留原始的大小写、标点和格式
+ */
+function getOriginalTextFromRange(contentText: string, startWordIndex: number, endWordIndex: number): string {
+  // 找到所有单词及其在原文中的位置
+  const wordRegex = /[\w']+/g;
+  const words: { word: string; index: number }[] = [];
+  let match;
+  
+  while ((match = wordRegex.exec(contentText)) !== null) {
+    words.push({ word: match[0], index: match.index });
+  }
+  
+  if (startWordIndex >= words.length) {
+    return '';
+  }
+  
+  const startPos = words[startWordIndex].index;
+  const endPos = endWordIndex < words.length 
+    ? words[endWordIndex].index 
+    : contentText.length;
+  
+  // 提取原文中的文本，保留格式
+  return contentText.slice(startPos, endPos).trim();
 }
 
 /**

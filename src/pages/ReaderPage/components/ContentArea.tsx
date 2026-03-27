@@ -128,18 +128,20 @@ interface RenderContentProps {
   onWordClick: (word: string, context: string) => void;
 }
 
-// 使用新的单词级匹配计算相似度
+// 检查当前文本是否应该高亮
+// 策略：检查当前文本是否包含匹配文本中的大部分单词
 const checkShouldHighlight = (
   currentText: string,
   highlightedText: string,
   threshold: number
 ): boolean => {
-  const words1 = tokenize(currentText);
-  const words2 = tokenize(highlightedText);
+  const currentWords = tokenize(currentText);
+  const highlightedWords = tokenize(highlightedText);
   
-  if (words1.length === 0 || words2.length === 0) return false;
+  if (currentWords.length === 0 || highlightedWords.length === 0) return false;
   
-  const score = calculateMatchScore(words1, words2, 0.15);
+  // 计算两组单词的匹配得分
+  const score = calculateMatchScore(highlightedWords, currentWords, 0.15);
   return score >= threshold;
 };
 
