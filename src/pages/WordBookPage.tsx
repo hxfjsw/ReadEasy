@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input, Divider } from 'antd';
+import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input, Divider, Pagination } from 'antd';
 import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined, SoundOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { WordBook, WordBookItem } from '../types';
 
@@ -8,6 +8,10 @@ const WordBookPage: React.FC = () => {
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
   const [words, setWords] = useState<WordBookItem[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
   
   // 创建单词本弹窗
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -63,11 +67,42 @@ const WordBookPage: React.FC = () => {
     try {
       const bookWords = await window.electron.ipcRenderer.invoke('db:getWordsInBook', bookId);
       setWords(bookWords);
+      setCurrentPage(1); // 重置到第一页
     } catch (error) {
       message.error('加载单词失败');
     } finally {
       setLoading(false);
     }
+  };
+
+  // 刷新当前单词本
+  const handleRefreshWords = async () => {
+    if (!selectedBookId) return;
+    setLoading(true);
+    try {
+      const bookWords = await window.electron.ipcRenderer.invoke('db:getWordsInBook', selectedBookId);
+      setWords(bookWords);
+      message.success('刷新成功');
+    } catch (error) {
+      message.error('刷新失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 处理页码变化
+  const handlePageChange = (page: number, size?: number) => {
+    setCurrentPage(page);
+    if (size && size !== pageSize) {
+      setPageSize(size);
+    }
+  };
+
+  // 获取当前页的单词
+  const getCurrentPageWords = () => {
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    return words.slice(start, end);
   };
 
   const handleDeleteWord = async (wordId: number) => {
@@ -344,6 +379,14 @@ const WordBookPage: React.FC = () => {
               </h2>
               <div className="flex gap-2">
                 <Button 
+                  icon={<ReloadOutlined />}
+                  onClick={handleRefreshWords}
+                  loading={loading}
+                  title="刷新单词列表"
+                >
+                  刷新
+                </Button>
+                <Button 
                   icon={<FileTextOutlined />}
                   onClick={() => handleExport('txt')}
                 >
@@ -366,7 +409,7 @@ const WordBookPage: React.FC = () => {
 
             <List
               grid={{ gutter: 16, xs: 1, sm: 1, md: 2, lg: 2, xl: 3, xxl: 3 }}
-              dataSource={words}
+              dataSource={getCurrentPageWords()}
               loading={loading}
               renderItem={(word) => (
                 <List.Item>
@@ -439,6 +482,22 @@ const WordBookPage: React.FC = () => {
                 </List.Item>
               )}
             />
+            
+            {/* 分页 */}
+            {words.length > pageSize && (
+              <div className="flex justify-center mt-6">
+                <Pagination
+                  current={currentPage}
+                  pageSize={pageSize}
+                  total={words.length}
+                  onChange={handlePageChange}
+                  showSizeChanger
+                  showQuickJumper
+                  showTotal={(total) => `共 ${total} 个单词`}
+                  pageSizeOptions={['12', '24', '36', '48']}
+                />
+              </div>
+            )}
           </>
         )}
       </div>
