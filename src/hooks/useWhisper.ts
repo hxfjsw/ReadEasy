@@ -260,12 +260,13 @@ export function useWhisper(segmentDuration: number = 5) {
   }, [transcriptionSegments]);
 
   // 在文本中找到与识别结果最匹配的段落（使用滑动窗口 + 单词级匹配）
+  // 窗口容忍度设为50，允许匹配到更长的原文段落（多句子）
   const findMatchingSentence = useCallback((
     transcription: string, 
     contentText: string, 
     similarityThreshold: number = 0.5
   ): { sentence: string; similarity: number } | null => {
-    const match = findBestMatch(transcription, contentText, similarityThreshold, 5);
+    const match = findBestMatch(transcription, contentText, similarityThreshold, 50);
     
     if (match) {
       return { sentence: match.text, similarity: match.similarity };
