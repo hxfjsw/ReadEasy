@@ -5,7 +5,7 @@ import { DatabaseService } from '../../services/database';
 import { AIService } from '../../services/ai';
 import { ParserService } from '../../services/parser';
 import { GoogleTranslationService } from '../../services/translation';
-import { FreeDictionaryService } from '../../services/dictionary';
+import { YoudaoDictionaryService } from '../../services/youdao-dict';
 
 export function registerIPCHandlers(
   dbService: DatabaseService,
@@ -13,7 +13,7 @@ export function registerIPCHandlers(
 ): void {
   const parserService = new ParserService();
   const googleTranslateService = new GoogleTranslationService();
-  const freeDictionaryService = new FreeDictionaryService();
+  const youdaoDictionaryService = new YoudaoDictionaryService();
   
   console.log('[IPC] Registering IPC handlers...');
   
@@ -320,12 +320,12 @@ export function registerIPCHandlers(
   ipcMain.handle('ai:defineWord', async (_, params: { word: string; context?: string; configId?: number }) => {
     console.log('[IPC] ai:defineWord called:', params.word);
     
-    // 第一步：优先尝试 Free Dictionary API
+    // 第一步：优先尝试有道词典 API
     try {
-      console.log('[IPC] ai:defineWord trying Free Dictionary API first...');
-      const dictResult = await freeDictionaryService.lookup(params.word);
+      console.log('[IPC] ai:defineWord trying Youdao Dictionary API first...');
+      const dictResult = await youdaoDictionaryService.lookup(params.word);
       if (dictResult) {
-        console.log('[IPC] ai:defineWord Free Dictionary API success');
+        console.log('[IPC] ai:defineWord Youdao Dictionary API success');
         // 如果有上下文且已配置 AI，补充上下文分析
         if (params.context) {
           try {
@@ -343,10 +343,10 @@ export function registerIPCHandlers(
         return { success: true, data: dictResult, source: 'dictionary' };
       }
     } catch (dictError: any) {
-      console.log('[IPC] Free Dictionary API failed:', dictError.message);
+      console.log('[IPC] Youdao Dictionary API failed:', dictError.message);
     }
     
-    // 第二步：Free Dictionary API 未找到，尝试 AI
+    // 第二步：有道词典 API 未找到，尝试 AI
     console.log('[IPC] ai:defineWord falling back to AI...');
     try {
       const result = await aiService.getWordDefinition(params.word, params.context, params.configId);
@@ -372,19 +372,19 @@ export function registerIPCHandlers(
   ipcMain.handle('ai:defineWordBasic', async (_, params: { word: string; configId?: number }) => {
     console.log('[IPC] ai:defineWordBasic called:', params.word);
     
-    // 第一步：优先尝试 Free Dictionary API（更快且免费）
+    // 第一步：优先尝试有道词典 API（更快且免费）
     try {
-      console.log('[IPC] ai:defineWordBasic trying Free Dictionary API first...');
-      const dictResult = await freeDictionaryService.lookup(params.word);
+      console.log('[IPC] ai:defineWordBasic trying Youdao Dictionary API first...');
+      const dictResult = await youdaoDictionaryService.lookup(params.word);
       if (dictResult) {
-        console.log('[IPC] ai:defineWordBasic Free Dictionary API success');
+        console.log('[IPC] ai:defineWordBasic Youdao Dictionary API success');
         return { success: true, data: dictResult, source: 'dictionary' };
       }
     } catch (dictError: any) {
-      console.log('[IPC] Free Dictionary API failed:', dictError.message);
+      console.log('[IPC] Youdao Dictionary API failed:', dictError.message);
     }
     
-    // 第二步：Free Dictionary API 未找到，尝试 AI
+    // 第二步：有道词典 API 未找到，尝试 AI
     console.log('[IPC] ai:defineWordBasic falling back to AI...');
     try {
       const result = await aiService.getWordDefinitionBasic(params.word, params.configId);
