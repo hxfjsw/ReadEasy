@@ -5,6 +5,7 @@ import { DatabaseService } from '../../services/database';
 import { AIService } from '../../services/ai';
 import { ParserService } from '../../services/parser';
 import { GoogleTranslationService } from '../../services/translation';
+import { FreeDictionaryService } from '../../services/dictionary';
 
 export function registerIPCHandlers(
   dbService: DatabaseService,
@@ -12,6 +13,7 @@ export function registerIPCHandlers(
 ): void {
   const parserService = new ParserService();
   const googleTranslateService = new GoogleTranslationService();
+  const freeDictionaryService = new FreeDictionaryService();
   
   console.log('[IPC] Registering IPC handlers...');
   
@@ -317,9 +319,38 @@ export function registerIPCHandlers(
 
   ipcMain.handle('ai:defineWord', async (_, params: { word: string; context?: string; configId?: number }) => {
     console.log('[IPC] ai:defineWord called:', params.word);
+    
+    // 第一步：优先尝试 Free Dictionary API
+    try {
+      console.log('[IPC] ai:defineWord trying Free Dictionary API first...');
+      const dictResult = await freeDictionaryService.lookup(params.word);
+      if (dictResult) {
+        console.log('[IPC] ai:defineWord Free Dictionary API success');
+        // 如果有上下文且已配置 AI，补充上下文分析
+        if (params.context) {
+          try {
+            const detailedResult = await aiService.getWordDefinitionDetailed(params.word, params.context, params.configId);
+            return { 
+              success: true, 
+              data: { ...dictResult, ...detailedResult },
+              source: 'dictionary+ai'
+            };
+          } catch (aiError) {
+            // AI 补充失败，返回基础词典结果
+            console.log('[IPC] AI context analysis failed, returning dictionary result only');
+          }
+        }
+        return { success: true, data: dictResult, source: 'dictionary' };
+      }
+    } catch (dictError: any) {
+      console.log('[IPC] Free Dictionary API failed:', dictError.message);
+    }
+    
+    // 第二步：Free Dictionary API 未找到，尝试 AI
+    console.log('[IPC] ai:defineWord falling back to AI...');
     try {
       const result = await aiService.getWordDefinition(params.word, params.context, params.configId);
-      return { success: true, data: result };
+      return { success: true, data: result, source: 'ai' };
     } catch (error: any) {
       console.error('[IPC] ai:defineWord error:', error);
       // AI 未配置时，自动降级到 Google 翻译
@@ -327,7 +358,7 @@ export function registerIPCHandlers(
         console.log('[IPC] ai:defineWord falling back to Google Translate');
         try {
           const googleResult = await googleTranslateService.getWordDefinition(params.word);
-          return { success: true, data: googleResult };
+          return { success: true, data: googleResult, source: 'google' };
         } catch (googleError: any) {
           console.error('[IPC] Google fallback error:', googleError);
           return { success: false, message: googleError.message || '获取单词释义失败' };
@@ -340,9 +371,24 @@ export function registerIPCHandlers(
   // 分步查询：基础定义（快速返回）
   ipcMain.handle('ai:defineWordBasic', async (_, params: { word: string; configId?: number }) => {
     console.log('[IPC] ai:defineWordBasic called:', params.word);
+    
+    // 第一步：优先尝试 Free Dictionary API（更快且免费）
+    try {
+      console.log('[IPC] ai:defineWordBasic trying Free Dictionary API first...');
+      const dictResult = await freeDictionaryService.lookup(params.word);
+      if (dictResult) {
+        console.log('[IPC] ai:defineWordBasic Free Dictionary API success');
+        return { success: true, data: dictResult, source: 'dictionary' };
+      }
+    } catch (dictError: any) {
+      console.log('[IPC] Free Dictionary API failed:', dictError.message);
+    }
+    
+    // 第二步：Free Dictionary API 未找到，尝试 AI
+    console.log('[IPC] ai:defineWordBasic falling back to AI...');
     try {
       const result = await aiService.getWordDefinitionBasic(params.word, params.configId);
-      return { success: true, data: result };
+      return { success: true, data: result, source: 'ai' };
     } catch (error: any) {
       console.error('[IPC] ai:defineWordBasic error:', error);
       // AI 未配置时，自动降级到 Google 翻译
@@ -350,7 +396,7 @@ export function registerIPCHandlers(
         console.log('[IPC] ai:defineWordBasic falling back to Google Translate');
         try {
           const googleResult = await googleTranslateService.getWordDefinition(params.word);
-          return { success: true, data: googleResult };
+          return { success: true, data: googleResult, source: 'google' };
         } catch (googleError: any) {
           console.error('[IPC] Google fallback error:', googleError);
           return { success: false, message: googleError.message || '获取单词释义失败' };
