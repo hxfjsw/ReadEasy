@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button, List, Card, Empty, Input, message, Popconfirm, Tag, Upload } from 'antd';
-import { DeleteOutlined, SearchOutlined, CheckCircleOutlined, PlusOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, SearchOutlined, CheckCircleOutlined, PlusOutlined, DownloadOutlined, UploadOutlined, ReloadOutlined } from '@ant-design/icons';
 
 
 const MasteredWordsPage: React.FC = () => {
@@ -190,6 +190,13 @@ const MasteredWordsPage: React.FC = () => {
             style={{ width: 200 }}
             allowClear
           />
+          <Button 
+            icon={<ReloadOutlined />}
+            onClick={loadMasteredWords}
+            loading={loading}
+          >
+            刷新
+          </Button>
           <Button 
             icon={<DownloadOutlined />}
             onClick={handleExport}
