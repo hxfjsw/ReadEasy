@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { message } from 'antd';
 import { pipeline, AutomaticSpeechRecognitionPipeline } from '@xenova/transformers';
-import { findBestMatch } from '../utils/textMatching';
+import { findMatchByAnchorPoint } from '../utils/anchorMatching';
 
 // 音频分段信息
 interface AudioSegment {
@@ -259,17 +259,22 @@ export function useWhisper(segmentDuration: number = 5) {
     ) || null;
   }, [transcriptionSegments]);
 
-  // 在文本中找到与识别结果最匹配的段落（使用滑动窗口 + 单词级匹配）
-  // 窗口容忍度设为50，允许匹配到更长的原文段落（多句子）
+  // 在文本中找到与识别结果最匹配的段落（使用锚点定位算法）
+  // 找最长连续匹配的单词序列作为锚点，然后向两边扩展
   const findMatchingSentence = useCallback((
     transcription: string, 
     contentText: string, 
     similarityThreshold: number = 0.5
   ): { sentence: string; similarity: number } | null => {
-    const match = findBestMatch(transcription, contentText, similarityThreshold, 50);
+    // 将相似度阈值转换为最小覆盖率
+    // 例如：阈值 0.5 表示至少 50% 的单词需要匹配
+    const minCoverage = similarityThreshold;
+    
+    const match = findMatchByAnchorPoint(transcription, contentText, 3, minCoverage);
     
     if (match) {
-      return { sentence: match.text, similarity: match.similarity };
+      console.log(`[Match] 锚点长度: ${match.anchorLength}, 覆盖率: ${(match.coverage * 100).toFixed(1)}%`);
+      return { sentence: match.text, similarity: match.coverage };
     }
     
     return null;

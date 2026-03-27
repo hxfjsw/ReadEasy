@@ -3,7 +3,7 @@ import { Spin, Empty, Progress, Button, Tooltip } from 'antd';
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { LoadingState } from '../../../types/reader';
 import { HighlightedSentence } from '../../../hooks/useReaderAudio';
-import { calculateMatchScore, tokenize } from '../../../utils/textMatching';
+import { findMatchByAnchorPoint } from '../../../utils/anchorMatching';
 
 interface ContentAreaProps {
   loadingState: LoadingState;
@@ -129,20 +129,32 @@ interface RenderContentProps {
 }
 
 // 检查当前文本是否应该高亮
-// 策略：检查当前文本是否包含匹配文本中的大部分单词
+// 使用锚点匹配：检查当前句子是否包含在匹配文本的范围内
 const checkShouldHighlight = (
   currentText: string,
   highlightedText: string,
   threshold: number
 ): boolean => {
-  const currentWords = tokenize(currentText);
-  const highlightedWords = tokenize(highlightedText);
+  if (!currentText.trim() || !highlightedText.trim()) return false;
   
-  if (currentWords.length === 0 || highlightedWords.length === 0) return false;
+  // 方法：在当前句子和高亮文本之间找锚点
+  // 如果找到足够长的锚点，说明当前句子属于匹配范围
+  const match = findMatchByAnchorPoint(currentText, highlightedText, 2, 0.3);
   
-  // 计算两组单词的匹配得分
-  const score = calculateMatchScore(highlightedWords, currentWords, 0.15);
-  return score >= threshold;
+  if (match && match.coverage >= threshold * 0.5) {
+    return true;
+  }
+  
+  // 备选：检查当前文本是否是高亮文本的子串（或反之）
+  const normalizedCurrent = currentText.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  const normalizedHighlighted = highlightedText.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  
+  if (normalizedHighlighted.includes(normalizedCurrent) || 
+      normalizedCurrent.includes(normalizedHighlighted)) {
+    return true;
+  }
+  
+  return false;
 };
 
 const RenderContent: React.FC<RenderContentProps> = React.memo(({ 
