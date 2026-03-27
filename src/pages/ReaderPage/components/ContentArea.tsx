@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Spin, Empty, Progress, Button, Tooltip } from 'antd';
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { LoadingState } from '../../../types/reader';
@@ -42,6 +42,14 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
   goToNextPage,
   onWordClick,
 }) => {
+  // 页面切换时滚动到顶部
+  useEffect(() => {
+    const scrollableContent = contentRef.current?.querySelector('.reader-content');
+    if (scrollableContent) {
+      scrollableContent.scrollTop = 0;
+    }
+  }, [currentPage, contentRef]);
+
   if (loadingState.isLoading) {
     return (
       <div className={`flex-1 overflow-auto ${themeStyles.bg} relative`}>
