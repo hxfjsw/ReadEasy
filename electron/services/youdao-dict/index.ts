@@ -31,6 +31,7 @@ export interface YoudaoResponse {
           tran_entry?: Array<{
             pos_entry?: { pos?: string; pos_tips?: string };
             tran?: string;
+            def?: string;
             exam_sents?: {
               sent?: Array<{
                 chn_sent?: string;
@@ -350,9 +351,10 @@ export class YoudaoDictionaryService {
             if (e.tran_entry) {
               for (const tran of e.tran_entry) {
                 const pos = this.formatPos(tran.pos_entry?.pos);
-                const meaning = this.cleanHtmlTags(tran.tran || '');
+                // 柯林斯词典可能使用 tran 或 def 字段存储释义
+                const meaning = this.cleanHtmlTags(tran.tran || tran.def || '');
 
-                if (meaning && pos) {
+                if (meaning) {
                   const examples: string[] = [];
 
                   // 提取柯林斯例句
