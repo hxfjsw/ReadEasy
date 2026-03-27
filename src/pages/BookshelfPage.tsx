@@ -351,7 +351,13 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     }
     
     message.success(`添加完成：新增 ${addedCount} 个，已存在 ${existedCount} 个`);
-    setExtractModalOpen(false);
+    
+    // 刷新提取列表，排除已添加的熟词
+    if (selectedBook) {
+      openExtractWordsModal(selectedBook);
+    }
+    
+    // 清空选择
     setSelectedWords([]);
     
     // 触发熟词本刷新事件
