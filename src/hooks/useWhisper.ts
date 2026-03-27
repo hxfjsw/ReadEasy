@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { message } from 'antd';
 import { pipeline, AutomaticSpeechRecognitionPipeline } from '@xenova/transformers';
+import { findBestMatch } from '../utils/textMatching';
 
 // 音频分段信息
 interface AudioSegment {
@@ -245,77 +246,19 @@ export function useWhisper(segmentDuration: number = 5) {
     ) || null;
   }, [transcriptionSegments]);
 
-  // Levenshtein 距离算法
-  const levenshteinDistance = (str1: string, str2: string): number => {
-    const matrix: number[][] = [];
+  // 在文本中找到与识别结果最匹配的段落（使用滑动窗口 + 单词级匹配）
+  const findMatchingSentence = useCallback((
+    transcription: string, 
+    contentText: string, 
+    similarityThreshold: number = 0.5
+  ): { sentence: string; similarity: number } | null => {
+    const match = findBestMatch(transcription, contentText, similarityThreshold, 5);
     
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
+    if (match) {
+      return { sentence: match.text, similarity: match.similarity };
     }
     
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-    
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
-      }
-    }
-    
-    return matrix[str2.length][str1.length];
-  };
-
-  // 计算字符串相似度（包含子串匹配）
-  const calculateSimilarity = (str1: string, str2: string): number => {
-    if (str1 === str2) return 1;
-    if (str1.length === 0 || str2.length === 0) return 0;
-    
-    const s1 = str1.toLowerCase().replace(/[^\w\s]/g, '').trim();
-    const s2 = str2.toLowerCase().replace(/[^\w\s]/g, '').trim();
-    
-    if (s1 === s2) return 1;
-    
-    // 子串匹配：如果一个是另一个的子串，给予高相似度
-    if (s1.includes(s2) || s2.includes(s1)) {
-      const shorter = s1.length < s2.length ? s1 : s2;
-      const longer = s1.length < s2.length ? s2 : s1;
-      // 子串占长串的比例，最低0.5，最高1
-      return 0.5 + (shorter.length / longer.length) * 0.5;
-    }
-    
-    const len = Math.max(s1.length, s2.length);
-    const distance = levenshteinDistance(s1, s2);
-    return (len - distance) / len;
-  };
-
-  // 在文本中找到与识别结果最匹配的句子
-  const findMatchingSentence = useCallback((transcription: string, contentText: string, similarityThreshold: number = 0.5): { sentence: string; similarity: number } | null => {
-    // 将内容按句子分割
-    const sentences = contentText.split(/[.!?。！？]+/).filter(s => s.trim().length > 0);
-    
-    let bestMatch: { sentence: string; similarity: number } | null = null;
-    
-    for (const sentence of sentences) {
-      const similarity = calculateSimilarity(
-        transcription,
-        sentence
-      );
-      
-      if (similarity >= similarityThreshold && (!bestMatch || similarity > bestMatch.similarity)) {
-        bestMatch = { sentence: sentence.trim(), similarity };
-      }
-    }
-    
-    return bestMatch;
+    return null;
   }, []);
 
   const formatTime = (seconds: number): string => {

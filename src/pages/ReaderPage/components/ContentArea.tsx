@@ -3,6 +3,7 @@ import { Spin, Empty, Progress, Button, Tooltip } from 'antd';
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { LoadingState } from '../../../types/reader';
 import { HighlightedSentence } from '../../../hooks/useReaderAudio';
+import { calculateMatchScore, tokenize } from '../../../utils/textMatching';
 
 interface ContentAreaProps {
   loadingState: LoadingState;
@@ -127,55 +128,19 @@ interface RenderContentProps {
   onWordClick: (word: string, context: string) => void;
 }
 
-// 计算字符串相似度（用于高亮句子匹配）
-const calculateSimilarity = (str1: string, str2: string): number => {
-  if (str1 === str2) return 1;
-  if (str1.length === 0 || str2.length === 0) return 0;
+// 使用新的单词级匹配计算相似度
+const checkShouldHighlight = (
+  currentText: string,
+  highlightedText: string,
+  threshold: number
+): boolean => {
+  const words1 = tokenize(currentText);
+  const words2 = tokenize(highlightedText);
   
-  const s1 = str1.toLowerCase().replace(/[^\w\s]/g, '').trim();
-  const s2 = str2.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  if (words1.length === 0 || words2.length === 0) return false;
   
-  if (s1 === s2) return 1;
-  
-  // 子串匹配：如果一个是另一个的子串，给予高相似度
-  if (s1.includes(s2) || s2.includes(s1)) {
-    const shorter = s1.length < s2.length ? s1 : s2;
-    const longer = s1.length < s2.length ? s2 : s1;
-    // 子串占长串的比例，最低0.5，最高1
-    return 0.5 + (shorter.length / longer.length) * 0.5;
-  }
-  
-  const len = Math.max(s1.length, s2.length);
-  const distance = levenshteinDistance(s1, s2);
-  return (len - distance) / len;
-};
-
-const levenshteinDistance = (str1: string, str2: string): number => {
-  const matrix: number[][] = [];
-  
-  for (let i = 0; i <= str2.length; i++) {
-    matrix[i] = [i];
-  }
-  
-  for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
-  }
-  
-  for (let i = 1; i <= str2.length; i++) {
-    for (let j = 1; j <= str1.length; j++) {
-      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-  
-  return matrix[str2.length][str1.length];
+  const score = calculateMatchScore(words1, words2, 0.15);
+  return score >= threshold;
 };
 
 const RenderContent: React.FC<RenderContentProps> = React.memo(({ 
@@ -237,7 +202,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
             
             // 检查是否需要高亮
             const shouldHighlight = highlightedSentence !== null && 
-              calculateSimilarity(currentSentence, highlightedSentence.text) >= similarityThreshold;
+              checkShouldHighlight(currentSentence, highlightedSentence.text, similarityThreshold);
             
             elements.push(
               <SentenceSpan 
@@ -255,7 +220,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
             // 如果有累积的句子先处理
             if (currentSentence) {
               const shouldHighlight = highlightedSentence !== null && 
-                calculateSimilarity(currentSentence, highlightedSentence.text) >= similarityThreshold;
+                checkShouldHighlight(currentSentence, highlightedSentence.text, similarityThreshold);
               
               elements.push(
                 <SentenceSpan 
@@ -276,7 +241,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
         // 处理最后剩余的文本
         if (currentSentence.trim()) {
           const shouldHighlight = highlightedSentence !== null && 
-            calculateSimilarity(currentSentence, highlightedSentence.text) >= similarityThreshold;
+            checkShouldHighlight(currentSentence, highlightedSentence.text, similarityThreshold);
           
           elements.push(
             <SentenceSpan 
