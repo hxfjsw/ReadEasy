@@ -533,21 +533,53 @@ export class DatabaseService {
 
   // 阅读记录相关操作
   getReadingRecords(): schema.ReadingRecord[] {
-    const records = this.db.prepare('SELECT * FROM reading_records ORDER BY last_read_at DESC').all() as schema.ReadingRecord[];
-    console.log('[DB] getReadingRecords:', records.length, 'records');
+    const rawRecords = this.db.prepare('SELECT * FROM reading_records ORDER BY last_read_at DESC').all();
+    console.log('[DB] getReadingRecords raw:', rawRecords.length, 'records');
+    
+    // 打印第一条记录的原始字段名，用于调试
+    if (rawRecords.length > 0) {
+      console.log('[DB] First record raw keys:', Object.keys(rawRecords[0] as object));
+      console.log('[DB] First record raw:', JSON.stringify(rawRecords[0], null, 2));
+    }
+    
+    const records = rawRecords.map((r: any) => ({
+      id: r.id,
+      bookName: r.book_name,
+      filePath: r.file_path,
+      format: r.format,
+      progress: r.progress,
+      currentPosition: r.current_position,
+      bookmarks: r.bookmarks,
+      lastReadAt: r.last_read_at,
+    })) as schema.ReadingRecord[];
+    
     records.forEach((r, i) => {
-      console.log(`[DB] Record ${i}: id=${r.id}, name=${r.bookName}, path=${r.filePath}, lastReadAt=${r.lastReadAt}`);
+      console.log(`[DB] Record ${i}: id=${r.id}, name=${r.bookName}, path=${r.filePath}, currentPosition=${r.currentPosition}`);
     });
     return records;
   }
 
   getReadingRecord(filePath: string): schema.ReadingRecord | undefined {
-    return this.db.prepare('SELECT * FROM reading_records WHERE file_path = ?').get(filePath) as schema.ReadingRecord | undefined;
+    const raw = this.db.prepare('SELECT * FROM reading_records WHERE file_path = ?').get(filePath) as any;
+    if (!raw) return undefined;
+    return {
+      id: raw.id,
+      bookName: raw.book_name,
+      filePath: raw.file_path,
+      format: raw.format,
+      progress: raw.progress,
+      currentPosition: raw.current_position,
+      bookmarks: raw.bookmarks,
+      lastReadAt: raw.last_read_at,
+    };
   }
 
   addOrUpdateReadingRecord(data: schema.NewReadingRecord): void {
     console.log('[DB] addOrUpdateReadingRecord:', data.filePath);
     const existing = this.getReadingRecord(data.filePath);
+    
+    // 确保 bookmarks 有默认值
+    const bookmarks = (data as any).bookmarks ?? existing?.bookmarks ?? '[]';
     
     if (existing) {
       console.log('[DB] Updating existing record:', existing.id);
@@ -555,13 +587,13 @@ export class DatabaseService {
         UPDATE reading_records 
         SET progress = ?, current_position = ?, bookmarks = ?, last_read_at = unixepoch()
         WHERE id = ?
-      `).run(data.progress, data.currentPosition || null, data.bookmarks, existing.id);
+      `).run(data.progress, data.currentPosition || existing.currentPosition || null, bookmarks, existing.id);
     } else {
       console.log('[DB] Inserting new record');
       const result = this.db.prepare(`
         INSERT INTO reading_records (book_name, file_path, format, progress, current_position, bookmarks, last_read_at)
         VALUES (?, ?, ?, ?, ?, ?, unixepoch())
-      `).run(data.bookName, data.filePath, data.format, data.progress, data.currentPosition || null, data.bookmarks);
+      `).run(data.bookName, data.filePath, data.format, data.progress, data.currentPosition || null, bookmarks);
       console.log('[DB] Insert result:', result);
     }
   }
