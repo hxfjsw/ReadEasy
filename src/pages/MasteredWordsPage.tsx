@@ -273,37 +273,39 @@ const MasteredWordsPage: React.FC = () => {
           />
         ) : (
           <>
-            <List
-              loading={loading}
-              dataSource={paginatedWords}
-              renderItem={(word) => (
-                <List.Item
-                  actions={[
-                    <Popconfirm
-                      key="remove"
-                      title="确定移除？"
-                      description={`将 "${word}" 从熟词本移除，该单词将再次标记为生词。`}
-                      onConfirm={() => handleRemove(word)}
-                      okText="移除"
-                      cancelText="取消"
-                    >
-                      <Button 
-                        type="text" 
-                        danger 
-                        icon={<DeleteOutlined />}
+            <div className="flex-1 overflow-y-auto">
+              <List
+                loading={loading}
+                dataSource={paginatedWords}
+                renderItem={(word) => (
+                  <List.Item
+                    actions={[
+                      <Popconfirm
+                        key="remove"
+                        title="确定移除？"
+                        description={`将 "${word}" 从熟词本移除，该单词将再次标记为生词。`}
+                        onConfirm={() => handleRemove(word)}
+                        okText="移除"
+                        cancelText="取消"
                       >
-                        移除
-                      </Button>
-                    </Popconfirm>,
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={<span className="text-lg font-medium">{word}</span>}
-                  />
-                </List.Item>
-              )}
-              pagination={false}
-            />
+                        <Button 
+                          type="text" 
+                          danger 
+                          icon={<DeleteOutlined />}
+                        >
+                          移除
+                        </Button>
+                      </Popconfirm>,
+                    ]}
+                  >
+                    <List.Item.Meta
+                      title={<span className="text-lg font-medium">{word}</span>}
+                    />
+                  </List.Item>
+                )}
+                pagination={false}
+              />
+            </div>
             {/* 自定义分页 */}
             <div className="flex justify-center mt-4 pt-4 border-t">
               <Pagination
