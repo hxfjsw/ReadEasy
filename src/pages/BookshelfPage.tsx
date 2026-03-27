@@ -10,7 +10,8 @@ import {
   Tag,
   Modal,
   List,
-  Space
+  Space,
+  Select
 } from 'antd';
 import { 
   DeleteOutlined, 
@@ -69,6 +70,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   const [extractedWords, setExtractedWords] = useState<string[]>([]);
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [excludedCount, setExcludedCount] = useState(0);
+  const [extractPageSize, setExtractPageSize] = useState(50);
   
   // 单词查询弹窗状态
   const [wordPopupVisible, setWordPopupVisible] = useState(false);
@@ -620,9 +622,24 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
             <span className="text-gray-600">
               共提取到 <strong>{extractedWords.length}</strong> 个单词（已自动排除熟词本中的 {excludedCount} 个单词）
             </span>
-            <span className="text-gray-500 text-sm">
-              已选择 {selectedWords.length} 个
-            </span>
+            <div className="flex items-center gap-4">
+              <Select
+                size="small"
+                value={extractPageSize}
+                onChange={setExtractPageSize}
+                options={[
+                  { value: 20, label: '20条/页' },
+                  { value: 50, label: '50条/页' },
+                  { value: 100, label: '100条/页' },
+                  { value: 200, label: '200条/页' },
+                  { value: 500, label: '500条/页' },
+                ]}
+                style={{ width: 100 }}
+              />
+              <span className="text-gray-500 text-sm">
+                已选择 {selectedWords.length} 个
+              </span>
+            </div>
           </div>
           
           {extractLoading ? (
@@ -676,9 +693,9 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                   );
                 }}
                 pagination={{
-                  pageSize: 50,
+                  pageSize: extractPageSize,
                   showSizeChanger: false,
-                  simple: true,
+                  showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
                 }}
               />
             </div>
