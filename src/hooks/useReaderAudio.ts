@@ -107,8 +107,8 @@ export function useReaderAudio() {
             const currentTime = audioRef.current.currentTime;
             setAudioCurrentTime(currentTime);
             
-            // 实时识别：每15秒识别一次
-            const currentSegment = Math.floor(currentTime / 15);
+            // 实时识别：每5秒识别一次
+            const currentSegment = Math.floor(currentTime / 5);
             if (currentSegment !== lastTranscribedSegmentRef.current && currentSegment >= 0) {
               lastTranscribedSegmentRef.current = currentSegment;
               // 触发识别
@@ -167,7 +167,7 @@ export function useReaderAudio() {
     if (audioRef.current) {
       audioRef.current.currentTime = value;
       setAudioCurrentTime(value);
-      lastTranscribedSegmentRef.current = Math.floor(value / 15);
+      lastTranscribedSegmentRef.current = Math.floor(value / 5);
     }
   }, []);
 

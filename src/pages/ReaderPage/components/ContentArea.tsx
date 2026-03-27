@@ -224,7 +224,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
             
             // 检查是否需要高亮
             const shouldHighlight = highlightedSentence !== null && 
-              calculateSimilarity(currentSentence, highlightedSentence.text) >= 0.8;
+              calculateSimilarity(currentSentence, highlightedSentence.text) >= 0.2;
             
             elements.push(
               <SentenceSpan 
