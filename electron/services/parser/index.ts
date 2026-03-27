@@ -395,17 +395,31 @@ export class ParserService {
       }
     }
     
-    // 选择最佳标题：优先选择通用章节标题（如 "Chapter 1"）
-    const genericPatterns = /^(chapter|section|part)\s*\d+/i;
+    // 尝试从 <p> 标签中提取 Chapter X 标题（某些EPUB用<p>标签作为章节标题）
+    const pPattern = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+    let pMatch;
+    while ((pMatch = pPattern.exec(headerSlice)) !== null) {
+      let text = pMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      // 只保留匹配 Chapter X 格式的 <p> 标签
+      if (/^(chapter|section|part)\s*\d+/i.test(text) && text.length < 200) {
+        candidates.push({ text, priority: 15 }); // 优先级介于 h1 和 h2 之间
+      }
+    }
+    
+    // 从候选标题中提取 Chapter X 模式
+    const genericPatterns = /(chapter|section|part)\s*\d+[^\n]*/i;
     for (const candidate of candidates) {
-      // 如果是通用标题（如 "Chapter 1"），优先使用
-      if (genericPatterns.test(candidate.text)) {
-        title = candidate.text;
+      // 尝试从标题中提取 Chapter X 部分（例如从 "Roald Dahl Chapter 1 The Three Farmers" 提取 "Chapter 1 The Three Farmers"）
+      const match = candidate.text.match(genericPatterns);
+      if (match) {
+        // 提取匹配到的 Chapter X 及其后面的内容
+        const chapterIndex = candidate.text.toLowerCase().indexOf(match[0].toLowerCase());
+        title = candidate.text.slice(chapterIndex).trim();
         break;
       }
     }
     
-    // 如果没有找到通用标题，使用优先级最高的候选（非通用标题）
+    // 如果没有找到 Chapter X 模式，使用优先级最高的候选
     if (!title && candidates.length > 0) {
       candidates.sort((a, b) => a.priority - b.priority);
       title = candidates[0].text;
