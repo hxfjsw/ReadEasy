@@ -29,7 +29,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
   const file = useReaderFile();
   const vocab = useReaderVocabulary();
   const settings = useReaderSettings();
-  const audio = useReaderAudio();
+  const audio = useReaderAudio(settings.segmentDuration);
 
   const [chapterDrawerOpen, setChapterDrawerOpen] = useState(false);
 
@@ -145,6 +145,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           knownWords={vocab.knownWords}
           vocabularyAnalysis={vocab.vocabularyAnalysis}
           highlightedSentence={audio.highlightedSentence}
+          similarityThreshold={settings.similarityThreshold}
           theme={settings.theme}
           onMouseUp={handleMouseUp}
           onFileSelect={file.handleFileSelect}
@@ -193,10 +194,14 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         fontSize={settings.fontSize}
         lineHeight={settings.lineHeight}
         theme={settings.theme}
+        segmentDuration={settings.segmentDuration}
+        similarityThreshold={settings.similarityThreshold}
         onClose={() => settings.setSettingsDrawerOpen(false)}
         onFontSizeChange={settings.updateFontSize}
         onLineHeightChange={settings.updateLineHeight}
         onThemeChange={settings.updateTheme}
+        onSegmentDurationChange={settings.updateSegmentDuration}
+        onSimilarityThresholdChange={settings.updateSimilarityThreshold}
       />
     </div>
   );

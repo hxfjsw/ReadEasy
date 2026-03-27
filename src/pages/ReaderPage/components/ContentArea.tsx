@@ -18,6 +18,7 @@ interface ContentAreaProps {
   knownWords: Set<string>;
   vocabularyAnalysis: Map<string, string>;
   highlightedSentence: HighlightedSentence | null;
+  similarityThreshold: number;
   onMouseUp: () => void;
   onFileSelect: () => void;
   goToPreviousPage: () => void;
@@ -39,6 +40,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
   knownWords,
   vocabularyAnalysis,
   highlightedSentence,
+  similarityThreshold,
   onMouseUp,
   onFileSelect,
   goToPreviousPage,
@@ -224,7 +226,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
             
             // 检查是否需要高亮
             const shouldHighlight = highlightedSentence !== null && 
-              calculateSimilarity(currentSentence, highlightedSentence.text) >= 0.2;
+              calculateSimilarity(currentSentence, highlightedSentence.text) >= similarityThreshold;
             
             elements.push(
               <SentenceSpan 

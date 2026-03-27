@@ -10,7 +10,7 @@ export interface HighlightedSentence {
   endTime: number;
 }
 
-export function useReaderAudio() {
+export function useReaderAudio(segmentDuration: number = 5) {
   const [audioFile, setAudioFile] = useState<string>('');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
@@ -107,8 +107,8 @@ export function useReaderAudio() {
             const currentTime = audioRef.current.currentTime;
             setAudioCurrentTime(currentTime);
             
-            // 实时识别：每5秒识别一次
-            const currentSegment = Math.floor(currentTime / 5);
+            // 实时识别：根据设置的分片时长识别
+            const currentSegment = Math.floor(currentTime / segmentDuration);
             if (currentSegment !== lastTranscribedSegmentRef.current && currentSegment >= 0) {
               lastTranscribedSegmentRef.current = currentSegment;
               // 触发识别
@@ -167,7 +167,7 @@ export function useReaderAudio() {
     if (audioRef.current) {
       audioRef.current.currentTime = value;
       setAudioCurrentTime(value);
-      lastTranscribedSegmentRef.current = Math.floor(value / 5);
+      lastTranscribedSegmentRef.current = Math.floor(value / segmentDuration);
     }
   }, []);
 
