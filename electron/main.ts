@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import path from 'path';
 import { DatabaseService } from './services/database';
 import { AIService } from './services/ai';
@@ -35,8 +35,30 @@ const createWindow = () => {
     mainWindow?.show();
   });
 
-  // 移除顶部菜单栏（File Edit View 等）
-  Menu.setApplicationMenu(null);
+  // 设置应用菜单（包含调试选项）
+  const template = [
+    {
+      label: '调试',
+      submenu: [
+        {
+          label: '打开开发者工具',
+          accelerator: 'F12',
+          click: () => {
+            mainWindow?.webContents.openDevTools();
+          }
+        },
+        {
+          label: '重新加载',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => {
+            mainWindow?.webContents.reload();
+          }
+        }
+      ]
+    }
+  ];
+  const menu = Menu.buildFromTemplate(template as any);
+  Menu.setApplicationMenu(menu);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
