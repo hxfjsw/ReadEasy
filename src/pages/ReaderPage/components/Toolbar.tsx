@@ -1,5 +1,5 @@
-import { Button, Tag, Slider } from 'antd';
-import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, PlayCircleOutlined, PauseCircleOutlined, CustomerServiceOutlined } from '@ant-design/icons';
+import { Button, Tag, Slider, Badge } from 'antd';
+import { UploadOutlined, FileTextOutlined, MenuOutlined, SettingOutlined, MoonOutlined, SunOutlined, PlayCircleOutlined, PauseCircleOutlined, CustomerServiceOutlined, AudioOutlined } from '@ant-design/icons';
 import { LoadingState, Chapter } from '../../../types/reader';
 
 interface ToolbarProps {
@@ -22,6 +22,9 @@ interface ToolbarProps {
   onFormatTime: (seconds: number) => string;
   onSettingsClick: () => void;
   onThemeToggle: () => void;
+  onTranscribeAudio?: () => void;
+  isWhisperLoading?: boolean;
+  isTranscribing?: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -45,6 +48,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onFormatTime,
   onSettingsClick,
   onThemeToggle,
+  onTranscribeAudio,
+  isWhisperLoading,
+  isTranscribing,
 }) => {
   const bgClass = theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
   
@@ -80,6 +86,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           onSeek={onAudioSeek}
           onClose={onAudioClose}
           onFormatTime={onFormatTime}
+          onTranscribe={onTranscribeAudio}
+          isWhisperLoading={isWhisperLoading}
+          isTranscribing={isTranscribing}
         />
         
         <Button icon={<SettingOutlined />} onClick={onSettingsClick} />
@@ -100,7 +109,10 @@ const AudioControl: React.FC<{
   onSeek: (value: number) => void;
   onClose: () => void;
   onFormatTime: (seconds: number) => string;
-}> = ({ audioFile, isPlayingAudio, audioCurrentTime, audioDuration, theme, onSelect, onToggle, onSeek, onClose, onFormatTime }) => {
+  onTranscribe?: () => void;
+  isWhisperLoading?: boolean;
+  isTranscribing?: boolean;
+}> = ({ audioFile, isPlayingAudio, audioCurrentTime, audioDuration, theme, onSelect, onToggle, onSeek, onClose, onFormatTime, onTranscribe, isWhisperLoading, isTranscribing }) => {
   if (!audioFile) {
     return (
       <Button icon={<CustomerServiceOutlined />} size="small" onClick={onSelect}>有声书</Button>
@@ -118,6 +130,25 @@ const AudioControl: React.FC<{
         <span className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{onFormatTime(audioDuration)}</span>
       </div>
       <Button type="text" size="small" danger onClick={onClose}>关闭</Button>
+      
+      {/* 语音识别状态指示器 */}
+      {isWhisperLoading && (
+        <Badge status="processing" text="加载模型" />
+      )}
+      {isTranscribing && (
+        <Badge status="success" text="识别中" />
+      )}
+      {!isWhisperLoading && !isTranscribing && onTranscribe && (
+        <Button 
+          type="link" 
+          size="small"
+          icon={<AudioOutlined />}
+          onClick={onTranscribe}
+          title="预加载语音识别模型"
+        >
+          预加载模型
+        </Button>
+      )}
     </div>
   );
 };

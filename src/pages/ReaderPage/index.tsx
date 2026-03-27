@@ -15,6 +15,9 @@ import { ChapterDrawer } from './components/ChapterDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { WordPopupSidebar } from './components/WordPopupSidebar';
 
+// 导出 HighlightedSentence 类型
+export type { HighlightedSentence } from '../../hooks/useReaderAudio';
+
 
 
 const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitialFile }) => {
@@ -47,6 +50,13 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
       onClearInitialFile?.();
     }
   }, [initialFilePath]);
+
+  // 当文件内容变化时，设置内容文本用于音频句子匹配
+  useEffect(() => {
+    if (file.fileContent) {
+      audio.setContentText(file.fileContent);
+    }
+  }, [file.fileContent, audio.setContentText]);
 
   const handleWordClick = useCallback((word: string, context: string) => {
     audio.pauseAudioForInteraction();
@@ -115,6 +125,9 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         onFormatTime={audio.formatTime}
         onSettingsClick={() => settings.setSettingsDrawerOpen(true)}
         onThemeToggle={() => settings.updateTheme(settings.theme === 'dark' ? 'light' : 'dark')}
+        onTranscribeAudio={audio.transcribeCurrentAudio}
+        isWhisperLoading={audio.isWhisperLoading}
+        isTranscribing={audio.isTranscribing}
       />
 
       <div className="flex flex-1 overflow-auto">
@@ -131,6 +144,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           vocabularyLevel={vocabularyLevel}
           knownWords={vocab.knownWords}
           vocabularyAnalysis={vocab.vocabularyAnalysis}
+          highlightedSentence={audio.highlightedSentence}
           theme={settings.theme}
           onMouseUp={handleMouseUp}
           onFileSelect={file.handleFileSelect}

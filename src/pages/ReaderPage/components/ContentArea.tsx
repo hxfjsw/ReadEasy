@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Spin, Empty, Progress, Button, Tooltip } from 'antd';
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { LoadingState } from '../../../types/reader';
+import { HighlightedSentence } from '../../../hooks/useReaderAudio';
 
 interface ContentAreaProps {
   loadingState: LoadingState;
@@ -16,6 +17,7 @@ interface ContentAreaProps {
   vocabularyLevel: string;
   knownWords: Set<string>;
   vocabularyAnalysis: Map<string, string>;
+  highlightedSentence: HighlightedSentence | null;
   onMouseUp: () => void;
   onFileSelect: () => void;
   goToPreviousPage: () => void;
@@ -36,6 +38,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
   vocabularyLevel,
   knownWords,
   vocabularyAnalysis,
+  highlightedSentence,
   onMouseUp,
   onFileSelect,
   goToPreviousPage,
@@ -85,6 +88,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
                 vocabularyLevel={vocabularyLevel}
                 knownWords={knownWords}
                 vocabularyAnalysis={vocabularyAnalysis}
+                highlightedSentence={highlightedSentence}
                 onWordClick={onWordClick}
               />
             </div>
@@ -115,22 +119,84 @@ interface RenderContentProps {
   vocabularyLevel: string;
   knownWords: Set<string>;
   vocabularyAnalysis: Map<string, string>;
+  highlightedSentence: HighlightedSentence | null;
   onWordClick: (word: string, context: string) => void;
 }
+
+// 计算字符串相似度（用于高亮句子匹配）
+const calculateSimilarity = (str1: string, str2: string): number => {
+  if (str1 === str2) return 1;
+  if (str1.length === 0 || str2.length === 0) return 0;
+  
+  const s1 = str1.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  const s2 = str2.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  
+  if (s1 === s2) return 1;
+  
+  const len = Math.max(s1.length, s2.length);
+  const distance = levenshteinDistance(s1, s2);
+  return (len - distance) / len;
+};
+
+const levenshteinDistance = (str1: string, str2: string): number => {
+  const matrix: number[][] = [];
+  
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+};
 
 const RenderContent: React.FC<RenderContentProps> = React.memo(({ 
   text, 
   vocabularyLevel, 
   knownWords, 
   vocabularyAnalysis, 
+  highlightedSentence,
   onWordClick 
 }) => {
-  // 按行分割，处理 Markdown 标题
-  const lines = text.split('\n');
+  // 将文本分割成段落/句子
+  const sentences = text.split(/([.!?。！？]+\s*)/).filter(s => s.length > 0);
+  
+  // 重组句子（将标点符号和句子内容结合）
+  const combinedSentences: string[] = [];
+  for (let i = 0; i < sentences.length; i += 2) {
+    const sentence = sentences[i];
+    const punctuation = sentences[i + 1] || '';
+    if (sentence.trim()) {
+      combinedSentences.push(sentence + punctuation);
+    }
+  }
+  
+  // 如果没有标点符号分割，直接按段落分割
+  if (combinedSentences.length === 0) {
+    combinedSentences.push(...text.split('\n').filter(s => s.trim().length > 0));
+  }
+  
+  let sentenceIndex = 0;
   
   return (
     <>
-      {lines.map((line, lineIndex) => {
+      {text.split('\n').map((line, lineIndex) => {
         // 检测 Markdown 标题 (# 开头)
         const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
         if (headingMatch) {
@@ -144,40 +210,140 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
           );
         }
         
-        // 处理普通行
-        const parts = line.split(/(\s+|[.,!?;:"()[\]{}])/);
+        // 处理普通行，按句子分割并检查高亮
+        const lineSentences = line.split(/([.!?]+\s*)/).filter(s => s.length > 0);
+        const elements: React.ReactNode[] = [];
+        let currentSentence = '';
+        
+        for (let i = 0; i < lineSentences.length; i++) {
+          const part = lineSentences[i];
+          
+          // 如果是标点，附加到当前句子
+          if (/^[.!?]+\s*$/.test(part)) {
+            currentSentence += part;
+            
+            // 检查是否需要高亮
+            const shouldHighlight = highlightedSentence !== null && 
+              calculateSimilarity(currentSentence, highlightedSentence.text) >= 0.8;
+            
+            elements.push(
+              <SentenceSpan 
+                key={`sent-${sentenceIndex++}`}
+                sentence={currentSentence}
+                vocabularyLevel={vocabularyLevel}
+                knownWords={knownWords}
+                vocabularyAnalysis={vocabularyAnalysis}
+                onWordClick={onWordClick}
+                isHighlighted={shouldHighlight}
+              />
+            );
+            currentSentence = '';
+          } else {
+            // 如果有累积的句子先处理
+            if (currentSentence) {
+              const shouldHighlight = highlightedSentence !== null && 
+                calculateSimilarity(currentSentence, highlightedSentence.text) >= 0.8;
+              
+              elements.push(
+                <SentenceSpan 
+                  key={`sent-${sentenceIndex++}`}
+                  sentence={currentSentence}
+                  vocabularyLevel={vocabularyLevel}
+                  knownWords={knownWords}
+                  vocabularyAnalysis={vocabularyAnalysis}
+                  onWordClick={onWordClick}
+                  isHighlighted={shouldHighlight}
+                />
+              );
+            }
+            currentSentence = part;
+          }
+        }
+        
+        // 处理最后剩余的文本
+        if (currentSentence.trim()) {
+          const shouldHighlight = highlightedSentence !== null && 
+            calculateSimilarity(currentSentence, highlightedSentence.text) >= 0.8;
+          
+          elements.push(
+            <SentenceSpan 
+              key={`sent-${sentenceIndex++}`}
+              sentence={currentSentence}
+              vocabularyLevel={vocabularyLevel}
+              knownWords={knownWords}
+              vocabularyAnalysis={vocabularyAnalysis}
+              onWordClick={onWordClick}
+              isHighlighted={shouldHighlight}
+            />
+          );
+        }
+        
         return (
           <p key={`line-${lineIndex}`} className="my-0 leading-relaxed">
-            {parts.map((part, index) => {
-              if (!/^[a-zA-Z]+$/.test(part)) return <span key={index}>{part}</span>;
-              
-              const contextStart = Math.max(0, index - 20);
-              const contextEnd = Math.min(parts.length, index + 20);
-              const context = parts.slice(contextStart, contextEnd).join('');
-              
-              const lowerWord = part.toLowerCase();
-              const isKnown = knownWords.has(lowerWord);
-              const wordLevel = vocabularyAnalysis.get(lowerWord);
-              const userLevelIndex = levelOrder.indexOf(vocabularyLevel);
-              const wordLevelIndex = wordLevel ? levelOrder.indexOf(wordLevel) : -1;
-              const isUnknown = !isKnown && wordLevel && wordLevelIndex > userLevelIndex;
-              const levelColor = wordLevel ? levelColors[wordLevel] : '';
-              
-              return (
-                <Tooltip key={index} title={part}>
-                  <span
-                    className={`cursor-pointer hover:bg-yellow-200 hover:text-blue-600 transition-colors rounded px-0.5 ${isUnknown ? 'border-b-2 border-red-400 bg-red-50' : ''}`}
-                    style={levelColor ? { borderBottom: `2px solid ${levelColor}` } : {}}
-                    onClick={() => onWordClick(part.toLowerCase(), context)}
-                  >
-                    {part}
-                  </span>
-                </Tooltip>
-              );
-            })}
+            {elements}
           </p>
         );
       })}
     </>
   );
 });
+
+// 句子组件（支持高亮）
+interface SentenceSpanProps {
+  sentence: string;
+  vocabularyLevel: string;
+  knownWords: Set<string>;
+  vocabularyAnalysis: Map<string, string>;
+  onWordClick: (word: string, context: string) => void;
+  isHighlighted: boolean;
+}
+
+const SentenceSpan: React.FC<SentenceSpanProps> = ({
+  sentence,
+  vocabularyLevel,
+  knownWords,
+  vocabularyAnalysis,
+  onWordClick,
+  isHighlighted,
+}) => {
+  // 将句子分割成单词和非单词
+  const parts = sentence.split(/(\s+|[.,!?;:"()[\]{}])/);
+  
+  return (
+    <span 
+      className={`transition-colors duration-500 rounded px-1 ${
+        isHighlighted 
+          ? 'bg-yellow-300 text-black font-medium shadow-sm' 
+          : ''
+      }`}
+    >
+      {parts.map((part, index) => {
+        if (!/^[a-zA-Z]+$/.test(part)) return <span key={index}>{part}</span>;
+        
+        const contextStart = Math.max(0, index - 20);
+        const contextEnd = Math.min(parts.length, index + 20);
+        const context = parts.slice(contextStart, contextEnd).join('');
+        
+        const lowerWord = part.toLowerCase();
+        const isKnown = knownWords.has(lowerWord);
+        const wordLevel = vocabularyAnalysis.get(lowerWord);
+        const userLevelIndex = levelOrder.indexOf(vocabularyLevel);
+        const wordLevelIndex = wordLevel ? levelOrder.indexOf(wordLevel) : -1;
+        const isUnknown = !isKnown && wordLevel && wordLevelIndex > userLevelIndex;
+        const levelColor = wordLevel ? levelColors[wordLevel] : '';
+        
+        return (
+          <Tooltip key={index} title={part}>
+            <span
+              className={`cursor-pointer hover:bg-yellow-200 hover:text-blue-600 transition-colors rounded px-0.5 ${isUnknown ? 'border-b-2 border-red-400 bg-red-50' : ''}`}
+              style={levelColor ? { borderBottom: `2px solid ${levelColor}` } : {}}
+              onClick={() => onWordClick(part.toLowerCase(), context)}
+            >
+              {part}
+            </span>
+          </Tooltip>
+        );
+      })}
+    </span>
+  );
+};

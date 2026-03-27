@@ -1,13 +1,27 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { message } from 'antd';
+import { useWhisper } from './useWhisper';
+
+// 高亮句子信息
+export interface HighlightedSentence {
+  text: string;
+  similarity: number;
+  startTime: number;
+  endTime: number;
+}
 
 export function useReaderAudio() {
   const [audioFile, setAudioFile] = useState<string>('');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
+  const [highlightedSentence, setHighlightedSentence] = useState<HighlightedSentence | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTranscribedSegmentRef = useRef<number>(-1);
+  const contentTextRef = useRef<string>('');
+  
+  const whisper = useWhisper();
 
   // 选择音频文件
   const handleSelectAudio = useCallback(async () => {
@@ -50,13 +64,25 @@ export function useReaderAudio() {
         });
         
         audioRef.current = audio;
+        
+        // 初始化音频分段（用于识别）
+        try {
+          const response = await fetch(`file://${path}`);
+          const blob = await response.blob();
+          const file = new File([blob], path.split('/').pop() || 'audio.mp3', { type: 'audio/mpeg' });
+          await whisper.initAudioSegments(file);
+          lastTranscribedSegmentRef.current = -1;
+        } catch (e) {
+          console.error('初始化音频分段失败:', e);
+        }
+        
         message.success('有声书已加载');
       }
     } catch (error) {
       console.error('选择音频文件失败:', error);
       message.error('选择音频文件失败');
     }
-  }, []);
+  }, [whisper]);
 
   // 播放/暂停音频
   const toggleAudioPlayback = useCallback(() => {
@@ -78,7 +104,16 @@ export function useReaderAudio() {
         // 启动进度更新
         audioProgressIntervalRef.current = setInterval(() => {
           if (audioRef.current) {
-            setAudioCurrentTime(audioRef.current.currentTime);
+            const currentTime = audioRef.current.currentTime;
+            setAudioCurrentTime(currentTime);
+            
+            // 实时识别：每15秒识别一次
+            const currentSegment = Math.floor(currentTime / 15);
+            if (currentSegment !== lastTranscribedSegmentRef.current && currentSegment >= 0) {
+              lastTranscribedSegmentRef.current = currentSegment;
+              // 触发识别
+              handleTranscriptionAtTime(currentTime);
+            }
           }
         }, 1000);
       }).catch((error) => {
@@ -87,6 +122,31 @@ export function useReaderAudio() {
       });
     }
   }, [isPlayingAudio]);
+
+  // 处理指定时间的识别和高亮
+  const handleTranscriptionAtTime = useCallback(async (currentTime: number) => {
+    if (!contentTextRef.current) return;
+    
+    // 识别当前时间段
+    const segment = await whisper.transcribeAtTime(currentTime);
+    
+    if (segment && segment.text) {
+      // 查找匹配的句子
+      const match = whisper.findMatchingSentence(segment.text, contentTextRef.current);
+      
+      if (match) {
+        console.log(`[Audio] 高亮句子 (相似度 ${(match.similarity * 100).toFixed(1)}%):`, match.sentence);
+        setHighlightedSentence({
+          text: match.sentence,
+          similarity: match.similarity,
+          startTime: segment.startTime,
+          endTime: segment.endTime,
+        });
+      } else {
+        console.log('[Audio] 未找到匹配的句子，识别文本:', segment.text);
+      }
+    }
+  }, [whisper]);
 
   // 暂停音频（用于查词或翻译时）
   const pauseAudioForInteraction = useCallback(() => {
@@ -107,6 +167,7 @@ export function useReaderAudio() {
     if (audioRef.current) {
       audioRef.current.currentTime = value;
       setAudioCurrentTime(value);
+      lastTranscribedSegmentRef.current = Math.floor(value / 15);
     }
   }, []);
 
@@ -127,10 +188,24 @@ export function useReaderAudio() {
     setIsPlayingAudio(false);
     setAudioCurrentTime(0);
     setAudioDuration(0);
+    setHighlightedSentence(null);
+    lastTranscribedSegmentRef.current = -1;
+    contentTextRef.current = '';
+    whisper.resetTranscription();
     if (audioProgressIntervalRef.current) {
       clearInterval(audioProgressIntervalRef.current);
       audioProgressIntervalRef.current = null;
     }
+  }, [whisper]);
+
+  // 设置当前内容文本（用于句子匹配）
+  const setContentText = useCallback((text: string) => {
+    contentTextRef.current = text;
+  }, []);
+
+  // 使用 Whisper 识别当前音频（手动触发全部识别）
+  const transcribeCurrentAudio = useCallback(async () => {
+    message.info('请播放音频，系统会自动根据播放位置识别并高亮文本');
   }, []);
 
   // 清理音频资源
@@ -151,11 +226,17 @@ export function useReaderAudio() {
     isPlayingAudio,
     audioCurrentTime,
     audioDuration,
+    highlightedSentence,
     handleSelectAudio,
     toggleAudioPlayback,
     pauseAudioForInteraction,
     handleAudioSeek,
     formatTime,
     closeAudio,
+    transcribeCurrentAudio,
+    setContentText,
+    whisperModelLoaded: whisper.modelLoaded,
+    isWhisperLoading: whisper.isModelLoading,
+    isTranscribing: whisper.isTranscribing,
   };
 }
