@@ -6,6 +6,7 @@ import {
   SettingOutlined,
   BookFilled,
   CheckCircleOutlined,
+  DeleteOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons';
@@ -14,11 +15,12 @@ import WordBookPage from './pages/WordBookPage';
 import SettingsPage from './pages/SettingsPage';
 import BookshelfPage from './pages/BookshelfPage';
 import MasteredWordsPage from './pages/MasteredWordsPage';
+import IgnoredWordsPage from './pages/IgnoredWordsPage';
 import { useSettingsStore } from './stores/settingsStore';
 
 const { Sider, Content } = Layout;
 
-type PageType = 'reader' | 'bookshelf' | 'wordbook' | 'mastered' | 'settings';
+type PageType = 'reader' | 'bookshelf' | 'wordbook' | 'mastered' | 'ignored' | 'settings';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('bookshelf');
@@ -77,6 +79,11 @@ function App() {
       label: '熟词本',
     },
     {
+      key: 'ignored',
+      icon: <DeleteOutlined />,
+      label: '废词本',
+    },
+    {
       key: 'settings',
       icon: <SettingOutlined />,
       label: '设置',
@@ -106,6 +113,9 @@ function App() {
         </div>
         <div style={{ display: currentPage === 'mastered' ? 'block' : 'none', height: '100%' }}>
           <MasteredWordsPage />
+        </div>
+        <div style={{ display: currentPage === 'ignored' ? 'block' : 'none', height: '100%' }}>
+          <IgnoredWordsPage />
         </div>
         <div style={{ display: currentPage === 'settings' ? 'block' : 'none', height: '100%' }}>
           <SettingsPage />
