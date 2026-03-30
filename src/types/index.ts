@@ -96,6 +96,9 @@ export interface WordBookItem extends Word {
   contextAnalysis?: string;
   contextTranslation?: string;
   addedAt: Date;
+  // ECDICT 标签和词频
+  tag?: string;
+  frq?: number;
 }
 
 // AI配置

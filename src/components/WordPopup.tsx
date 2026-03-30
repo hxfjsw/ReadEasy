@@ -285,6 +285,8 @@ const WordPopup: React.FC<WordPopupProps> = ({
         etymology: def.etymology,
         rootAnalysis: def.rootAnalysis,
         relatedWords: def.relatedWords,
+        tag: (def as any).tag,
+        frq: (def as any).frq,
       });
 
       if (wordResult && wordResult.success) {
@@ -344,6 +346,8 @@ const WordPopup: React.FC<WordPopupProps> = ({
         etymology: fullDef.etymology,
         rootAnalysis: fullDef.rootAnalysis,
         relatedWords: fullDef.relatedWords,
+        tag: (fullDef as any).tag,
+        frq: (fullDef as any).frq,
       });
 
       if (wordResult && wordResult.success) {

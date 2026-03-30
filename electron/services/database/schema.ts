@@ -25,6 +25,9 @@ export const words = sqliteTable('words', {
   etymology: text('etymology'),
   rootAnalysis: text('root_analysis'),
   relatedWords: text('related_words'),
+  // ECDICT 字段
+  tag: text('tag'),
+  frq: integer('frq'),
 });
 
 // 单词本表

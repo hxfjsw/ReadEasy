@@ -63,7 +63,10 @@ export class DatabaseService {
         -- 扩展字段：词源和词根词缀
         etymology TEXT,
         root_analysis TEXT,
-        related_words TEXT
+        related_words TEXT,
+        -- ECDICT 字段
+        tag TEXT,
+        frq INTEGER
       )
     `);
 
@@ -328,8 +331,8 @@ export class DatabaseService {
     }
 
     const result = this.db.prepare(`
-      INSERT INTO words (word, phonetic_uk, phonetic_us, definition_cn, definition_en, level, frequency, source, etymology, root_analysis, related_words)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO words (word, phonetic_uk, phonetic_us, definition_cn, definition_en, level, frequency, source, etymology, root_analysis, related_words, tag, frq)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       data.word,
       data.phoneticUk || null,
@@ -341,7 +344,9 @@ export class DatabaseService {
       data.source || 'local',
       data.etymology || null,
       data.rootAnalysis ? JSON.stringify(data.rootAnalysis) : null,
-      data.relatedWords ? JSON.stringify(data.relatedWords) : null
+      data.relatedWords ? JSON.stringify(data.relatedWords) : null,
+      data.tag || null,
+      data.frq || null
     );
     console.log('[DB] addWord success:', data.word, 'id:', result.lastInsertRowid);
     return Number(result.lastInsertRowid);
@@ -474,6 +479,8 @@ export class DatabaseService {
       etymology: row.etymology,
       rootAnalysis: row.root_analysis ? JSON.parse(row.root_analysis) : undefined,
       relatedWords: row.related_words ? JSON.parse(row.related_words) : undefined,
+      tag: row.tag,
+      frq: row.frq,
     }));
 
     console.log('[DB] getWordsInBook result:', result?.length || 0, 'items');

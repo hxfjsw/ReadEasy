@@ -1,8 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input, Divider, Pagination, Dropdown } from 'antd';
+import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input, Divider, Pagination, Dropdown, Tooltip } from 'antd';
 import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined, SoundOutlined, CheckCircleOutlined, ReloadOutlined, PlayCircleOutlined, DownOutlined } from '@ant-design/icons';
 import { WordBook, WordBookItem } from '../types';
 import { PracticePage } from '@/pages/WordBookPage/practice';
+
+// Tag 标签映射
+const tagLabels: Record<string, string> = {
+  'zk': '中考',
+  'gk': '高考',
+  'cet4': '四级',
+  'cet6': '六级',
+  'ky': '考研',
+  'ielts': '雅思',
+  'toefl': '托福',
+  'gre': 'GRE',
+  'tem8': '专八',
+  'oxford': '牛津3000',
+  'collins': '柯林斯',
+};
+
+// 解析 tag 为标签数组
+const parseTags = (tagString?: string): string[] => {
+  if (!tagString) return [];
+  return tagString.split(/\s+/).filter(t => t);
+};
+
+// 解析 definitionCn JSON 字符串为可读格式
+const parseDefinitionCn = (definitionCn?: string): Array<{pos: string; meaningCn: string}> => {
+  if (!definitionCn) return [];
+  
+  try {
+    const parsed = JSON.parse(definitionCn);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // JSON 解析失败，按分号分割
+    return definitionCn.split(';').map(def => ({
+      pos: '',
+      meaningCn: def.trim(),
+    }));
+  }
+  
+  return [];
+};
 
 // 练习按钮组件
 type PracticeFilter = 'all' | 'new' | 'review' | 'wrong';
@@ -646,8 +687,18 @@ const WordBookPage: React.FC = () => {
         {selectedWord && (
           <div className="py-4">
             {/* 单词标题 */}
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="text-3xl font-bold text-gray-800">{selectedWord.word}</h2>
+              {/* 词频 */}
+              {selectedWord.frq && selectedWord.frq > 0 && selectedWord.frq <= 5000 && (
+                <Tag color="blue">Frq: {selectedWord.frq}</Tag>
+              )}
+              {/* 等级标签 */}
+              {parseTags(selectedWord.tag).map(tag => (
+                <Tag key={tag} color="green">
+                  {tagLabels[tag] || tag}
+                </Tag>
+              ))}
               <Tag color={getLevelColor(selectedWord.level)}>
                 {getLevelLabel(selectedWord.level)}
               </Tag>
@@ -671,7 +722,16 @@ const WordBookPage: React.FC = () => {
             {selectedWord.definitionCn && (
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-gray-500 mb-2">中文释义</h4>
-                <p className="text-gray-800 leading-relaxed">{selectedWord.definitionCn}</p>
+                <div className="space-y-2">
+                  {parseDefinitionCn(selectedWord.definitionCn).map((def, index) => (
+                    <div key={index} className="flex gap-2">
+                      {def.pos && (
+                        <Tag color="default">{def.pos}</Tag>
+                      )}
+                      <span className="text-gray-800">{def.meaningCn}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
