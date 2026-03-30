@@ -80,6 +80,8 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   const [extractPageSize, setExtractPageSize] = useState(50);
   const [extractSortOrder, setExtractSortOrder] = useState<'original' | 'alphabetical' | 'frequency'>('original');
   const [loadingDefinitions, setLoadingDefinitions] = useState(false);
+  const [ignoringInvalidWords, setIgnoringInvalidWords] = useState(false);
+  const [ignoredInvalidCount, setIgnoredInvalidCount] = useState(0);
   
   // 单词查询弹窗状态
   const [wordPopupVisible, setWordPopupVisible] = useState(false);
@@ -435,6 +437,56 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     }
   }, [extractSortOrder, originalExtractedWords]);
 
+  // 一键排除无效词（ECDICT 中找不到的词）
+  const handleIgnoreInvalidWords = async () => {
+    if (extractedWords.length === 0) return;
+    
+    setIgnoringInvalidWords(true);
+    try {
+      // 获取所有单词
+      const allWords = extractedWords.map(w => w.word.toLowerCase());
+      
+      // 批量查询 ECDICT
+      const ecdictResult = await window.electron.ipcRenderer.invoke('ecdict:batchLookup', allWords);
+      
+      if (ecdictResult?.success) {
+        const foundWords = new Set(Object.keys(ecdictResult.data || {}));
+        
+        // 找出 ECDICT 中找不到的词（无效词）
+        const invalidWords = extractedWords.filter(w => !foundWords.has(w.word.toLowerCase()));
+        
+        if (invalidWords.length === 0) {
+          message.info('没有发现无效词，所有单词都能在词典中找到');
+          return;
+        }
+        
+        // 将无效词加入废词本
+        const invalidWordStrings = invalidWords.map(w => w.word);
+        const result = await window.electron.ipcRenderer.invoke(
+          'db:batchAddIgnoredWords', 
+          invalidWordStrings, 
+          selectedBook?.bookName
+        );
+        
+        if (result.success) {
+          // 从当前列表中移除无效词
+          const validWords = extractedWords.filter(w => foundWords.has(w.word.toLowerCase()));
+          setExtractedWords(validWords);
+          setOriginalExtractedWords(validWords);
+          setIgnoredInvalidCount(invalidWords.length);
+          message.success(`已排除 ${invalidWords.length} 个无效词，已加入废词本`);
+        } else {
+          message.error('加入废词本失败');
+        }
+      }
+    } catch (error) {
+      console.error('排除无效词失败:', error);
+      message.error('排除无效词失败');
+    } finally {
+      setIgnoringInvalidWords(false);
+    }
+  };
+
     // 从文本中提取单词和例句
   const extractWordsFromText = (text: string): Map<string, { count: number; example?: string }> => {
     const wordData = new Map<string, { count: number; example?: string }>();
@@ -741,6 +793,15 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
             取消
           </Button>,
           <Button
+            key="ignore-invalid"
+            loading={ignoringInvalidWords}
+            disabled={ignoringInvalidWords || extractedWords.length === 0}
+            onClick={handleIgnoreInvalidWords}
+            danger
+          >
+            排除无效词
+          </Button>,
+          <Button
             key="load-definitions"
             loading={loadingDefinitions}
             disabled={loadingDefinitions || extractedWords.length === 0}
@@ -762,7 +823,9 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-600">
-              共提取到 <strong>{extractedWords.length}</strong> 个单词（已自动排除熟词本中的 {excludedCount} 个单词）
+              共提取到 <strong>{extractedWords.length}</strong> 个单词
+              {excludedCount > 0 && `（已自动排除熟词本中的 ${excludedCount} 个单词）`}
+              {ignoredInvalidCount > 0 && `，已排除 ${ignoredInvalidCount} 个无效词到废词本`}
             </span>
             <div className="flex items-center gap-4">
               <Select

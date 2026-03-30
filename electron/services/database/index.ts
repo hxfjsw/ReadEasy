@@ -743,6 +743,103 @@ export class DatabaseService {
     return result?.count || 0;
   }
 
+  // ============ 废词本相关操作 ============
+
+  // 添加废词
+  addIgnoredWord(word: string, source?: string): { success: boolean; id?: number; existed?: boolean } {
+    try {
+      const result = this.db.prepare(`
+        INSERT INTO ignored_words (word, source, added_at)
+        VALUES (?, ?, unixepoch())
+        ON CONFLICT(word) DO UPDATE SET added_at = unixepoch()
+      `).run(word.toLowerCase().trim(), source || null);
+
+      console.log('[DB] addIgnoredWord:', word, 'id:', result.lastInsertRowid);
+      return {
+        success: true,
+        id: Number(result.lastInsertRowid),
+        existed: result.changes === 0
+      };
+    } catch (error) {
+      console.error('[DB] addIgnoredWord error:', error);
+      return { success: false };
+    }
+  }
+
+  // 批量添加废词
+  batchAddIgnoredWords(words: string[], source?: string): { success: boolean; added: number; existed: number } {
+    let added = 0;
+    let existed = 0;
+    
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO ignored_words (word, source, added_at)
+        VALUES (?, ?, unixepoch())
+        ON CONFLICT(word) DO UPDATE SET added_at = unixepoch()
+      `);
+
+      const insert = this.db.transaction((wordList: string[]) => {
+        for (const word of wordList) {
+          const result = stmt.run(word.toLowerCase().trim(), source || null);
+          if (result.changes === 0) {
+            existed++;
+          } else {
+            added++;
+          }
+        }
+      });
+
+      insert(words);
+      console.log('[DB] batchAddIgnoredWords:', words.length, 'added:', added, 'existed:', existed);
+      return { success: true, added, existed };
+    } catch (error) {
+      console.error('[DB] batchAddIgnoredWords error:', error);
+      return { success: false, added, existed };
+    }
+  }
+
+  // 删除废词
+  removeIgnoredWord(word: string): boolean {
+    try {
+      const result = this.db.prepare(`
+        DELETE FROM ignored_words WHERE word = ?
+      `).run(word.toLowerCase().trim());
+
+      console.log('[DB] removeIgnoredWord:', word, 'changes:', result.changes);
+      return result.changes > 0;
+    } catch (error) {
+      console.error('[DB] removeIgnoredWord error:', error);
+      return false;
+    }
+  }
+
+  // 查询是否是废词
+  isIgnoredWord(word: string): boolean {
+    const result = this.db.prepare(`
+      SELECT 1 FROM ignored_words WHERE word = ?
+    `).get(word.toLowerCase().trim());
+
+    return !!result;
+  }
+
+  // 获取所有废词
+  getIgnoredWords(): string[] {
+    const rows = this.db.prepare(`
+      SELECT word FROM ignored_words ORDER BY added_at DESC
+    `).all() as { word: string }[];
+
+    return rows.map(r => r.word);
+  }
+
+  // 获取废词数量
+  getIgnoredWordCount(): number {
+    const result = this.db.prepare(`
+      SELECT COUNT(*) as count FROM ignored_words
+    `).get() as { count: number };
+
+    return result?.count || 0;
+  }
+
   // 关闭数据库
   close(): void {
     this.db.close();

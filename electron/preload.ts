@@ -30,6 +30,13 @@ export interface IPCChannels {
   'db:isMasteredWord': (word: string) => Promise<boolean>;
   'db:getMasteredWords': () => Promise<string[]>;
   
+  // 数据库操作 - 废词本
+  'db:addIgnoredWord': (word: string, source?: string) => Promise<{ success: boolean; id?: number; existed?: boolean }>;
+  'db:batchAddIgnoredWords': (words: string[], source?: string) => Promise<{ success: boolean; added: number; existed: number }>;
+  'db:removeIgnoredWord': (word: string) => Promise<boolean>;
+  'db:isIgnoredWord': (word: string) => Promise<boolean>;
+  'db:getIgnoredWords': () => Promise<string[]>;
+  
   // 数据库操作 - AI配置
   'db:getAIConfigs': () => Promise<any[]>;
   'db:getDefaultAIConfig': () => Promise<any>;

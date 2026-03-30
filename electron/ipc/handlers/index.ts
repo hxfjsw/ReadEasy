@@ -236,6 +236,31 @@ export function registerIPCHandlers(
     return dbService.getMasteredWords();
   });
 
+  // 数据库操作 - 废词本
+  ipcMain.handle('db:addIgnoredWord', async (_, word: string, source?: string) => {
+    console.log('[IPC] db:addIgnoredWord called:', word);
+    return dbService.addIgnoredWord(word, source);
+  });
+
+  ipcMain.handle('db:batchAddIgnoredWords', async (_, words: string[], source?: string) => {
+    console.log('[IPC] db:batchAddIgnoredWords called, count:', words.length);
+    return dbService.batchAddIgnoredWords(words, source);
+  });
+
+  ipcMain.handle('db:removeIgnoredWord', async (_, word: string) => {
+    console.log('[IPC] db:removeIgnoredWord called:', word);
+    return dbService.removeIgnoredWord(word);
+  });
+
+  ipcMain.handle('db:isIgnoredWord', async (_, word: string) => {
+    return dbService.isIgnoredWord(word);
+  });
+
+  ipcMain.handle('db:getIgnoredWords', async () => {
+    console.log('[IPC] db:getIgnoredWords called');
+    return dbService.getIgnoredWords();
+  });
+
   // 数据库操作 - AI配置
   ipcMain.handle('db:getAIConfigs', async () => {
     console.log('[IPC] db:getAIConfigs called');
