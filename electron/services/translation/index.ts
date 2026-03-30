@@ -31,6 +31,8 @@ export class GoogleTranslationService {
     }
 
     try {
+      console.log('[GoogleTranslate] 翻译请求:', { text: text.substring(0, 50), targetLang, sourceLang });
+      
       // 构建请求参数
       const params = new URLSearchParams();
       params.append('client', 'gtx');
@@ -45,10 +47,12 @@ export class GoogleTranslationService {
       params.append('q', text);
 
       const url = `${this.GOOGLE_TRANSLATE_URL}?${params.toString()}`;
+      console.log('[GoogleTranslate] 请求URL:', url.substring(0, 150) + '...');
       
       // 使用Electron的net模块进行HTTP请求
       const response = await this.fetchWithElectron(url);
       
+      console.log('[GoogleTranslate] 收到响应');
       return this.parseResponse(response, text);
     } catch (error: any) {
       console.error('Google translation error:', error);
@@ -107,6 +111,7 @@ export class GoogleTranslationService {
     try {
       // Google API返回的是JSON数组，需要解析
       // 格式: [[["翻译结果","原文",null,null,n]],null,"源语言代码"]
+      console.log('[GoogleTranslate] 解析响应:', response.substring(0, 200) + '...');
       const parsed = JSON.parse(response);
       
       // 提取翻译结果
@@ -115,8 +120,14 @@ export class GoogleTranslationService {
       if (Array.isArray(parsed[0])) {
         // 拼接所有翻译片段
         translatedText = parsed[0]
-          .map((item: any) => item[0])
-          .filter((text: string) => text)
+          .map((item: any) => {
+            // item 应该是 ["翻译文本", "原文", ...]
+            if (Array.isArray(item) && item.length > 0) {
+              return item[0];
+            }
+            return '';
+          })
+          .filter((text: string) => text && text.trim())
           .join('');
       }
 
@@ -125,6 +136,8 @@ export class GoogleTranslationService {
       
       // 置信度（如果有）
       const confidence = parsed[6] || undefined;
+
+      console.log('[GoogleTranslate] 提取翻译:', { translatedText: translatedText.substring(0, 50), detectedSourceLanguage });
 
       return {
         translatedText: translatedText || originalText,

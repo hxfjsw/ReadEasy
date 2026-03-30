@@ -127,14 +127,27 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     setIsTranslatingSubtitle(true);
     
     try {
+      console.log('[SubtitleTranslate] 开始翻译:', text.substring(0, 50) + '...');
       const result = await window.electron.ipcRenderer.invoke(
         subtitleTranslateSource === 'ai' ? 'ai:translate' : 'translate:sentence',
         { text: text.trim(), targetLang: 'zh-CN' }
       );
       
+      console.log('[SubtitleTranslate] 翻译结果:', result);
+      
       if (result.success) {
-        setSubtitleTranslation(result.data?.translatedText || result.data || '');
+        // translate:sentence 返回 { translatedText: string }
+        // ai:translate 返回 { translatedText: string } 或字符串
+        let translation = '';
+        if (typeof result.data === 'string') {
+          translation = result.data;
+        } else if (result.data?.translatedText) {
+          translation = result.data.translatedText;
+        }
+        console.log('[SubtitleTranslate] 翻译文本:', translation);
+        setSubtitleTranslation(translation);
       } else {
+        console.error('[SubtitleTranslate] 翻译失败:', result.message);
         setSubtitleTranslation('翻译失败');
       }
     } catch (error) {
