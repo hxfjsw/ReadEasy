@@ -29,7 +29,7 @@ export class ParserService {
   async parseEpub(filePath: string, options: ParseOptions = {}): Promise<ParsedBook> {
     const { maxChapters = 0, maxContentSize = 10 * 1024 * 1024 } = options;
     
-    console.log('[Parser] Starting EPUB parse:', filePath);
+    console.log('[Parser] Starting EPUB parse:', filePath, 'maxContentSize:', `${(maxContentSize / 1024 / 1024).toFixed(0)}MB`);
     const startTime = Date.now();
     
     try {
@@ -184,7 +184,7 @@ export class ParserService {
             
             // 检查总内容大小限制
             if (totalContentSize + cleanContent.length > maxContentSize) {
-              console.warn('[Parser] Total content size limit reached, stopping');
+              console.warn(`[Parser] Total content size limit reached: ${totalContentSize} + ${cleanContent.length} > ${maxContentSize}, stopping at chapter ${i + 1}`);
               chapters.push({
                 id: spineItem,
                 title: chapterTitle || `章节 ${i + 1}`,

@@ -86,9 +86,9 @@ export function registerIPCHandlers(
       console.log('[IPC] file:read extension:', ext);
       
       // 解析选项：默认最大10MB内容
-      const parseOptions = {
-        maxContentSize: options?.maxContentSize || 10 * 1024 * 1024,
-      };
+      const maxContentSize = options?.maxContentSize || 10 * 1024 * 1024;
+      const parseOptions = { maxContentSize };
+      console.log('[IPC] file:read parseOptions:', { maxContentSize: `${(maxContentSize / 1024 / 1024).toFixed(0)}MB` });
       
       if (ext === '.epub') {
         console.log('[IPC] file:read parsing EPUB...');

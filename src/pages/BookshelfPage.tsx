@@ -445,15 +445,18 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     try {
       // 获取所有单词
       const allWords = extractedWords.map(w => w.word.toLowerCase());
+      console.log(`[IgnoreInvalid] 总单词数: ${allWords.length}`);
       
       // 批量查询 ECDICT
       const ecdictResult = await window.electron.ipcRenderer.invoke('ecdict:batchLookup', allWords);
+      console.log(`[IgnoreInvalid] ECDICT 查询结果:`, ecdictResult?.success, '找到:', Object.keys(ecdictResult?.data || {}).length);
       
       if (ecdictResult?.success) {
         const foundWords = new Set(Object.keys(ecdictResult.data || {}));
         
         // 找出 ECDICT 中找不到的词（无效词）
         const invalidWords = extractedWords.filter(w => !foundWords.has(w.word.toLowerCase()));
+        console.log(`[IgnoreInvalid] 无效词数量: ${invalidWords.length}`);
         
         if (invalidWords.length === 0) {
           message.info('没有发现无效词，所有单词都能在词典中找到');
