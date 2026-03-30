@@ -35,7 +35,9 @@ function cleanPos(pos?: string): string {
 
 /**
  * 将 ECDICT 定义解析为按词性分割的格式
- * ECDICT 的 definitionCn 格式如："n. 外面,外表,外界; a. 外面的,外表的,外界的; adv. 外面,外表,界"
+ * ECDICT 的 definitionCn 格式如：
+ *   "n. 外面,外表,外界; a. 外面的,外表的,外界的"（分号分隔）
+ *   "v. 淹没\n浸透\n浸泡"（换行分隔，只有第一行有词性）
  */
 function parseECDICTDefinitions(ecdictResult: ECDICTDefinition): Array<{pos: string; meaningCn: string; examples: string[]}> {
   const definitions: Array<{pos: string; meaningCn: string; examples: string[]}> = [];
@@ -44,28 +46,45 @@ function parseECDICTDefinitions(ecdictResult: ECDICTDefinition): Array<{pos: str
     return definitions;
   }
   
-  // 按分号或换行分割不同的词性
-  const parts = ecdictResult.definitionCn.split(/;\s*|\n/).filter(p => p.trim());
+  // 先尝试按分号分割（不同词性）
+  const semiParts = ecdictResult.definitionCn.split(/;\s*/).filter(p => p.trim());
   
-  for (const part of parts) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
+  for (const semiPart of semiParts) {
+    const trimmedSemi = semiPart.trim();
+    if (!trimmedSemi) continue;
     
-    // 匹配词性前缀，如 "n. ", "adj. ", "adv. ", "vt. ", "vi. " 等
-    const match = trimmed.match(/^([a-z]+\.?)\s+(.+)$/i);
+    // 检查这部分是否包含换行（同一词性的多个释义）
+    const lines = trimmedSemi.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length === 0) continue;
+    
+    // 第一行应该包含词性
+    const firstLine = lines[0];
+    const match = firstLine.match(/^([a-z]+\.?)\s+(.+)$/i);
+    
     if (match) {
       const pos = match[1].trim();
-      const meaning = match[2].trim();
+      const firstMeaning = match[2].trim();
+      
+      // 第一行的释义
       definitions.push({
         pos: pos.endsWith('.') ? pos : pos + '.',
-        meaningCn: meaning,
+        meaningCn: firstMeaning,
         examples: [],
       });
+      
+      // 后续行继承相同的词性
+      for (let i = 1; i < lines.length; i++) {
+        definitions.push({
+          pos: pos.endsWith('.') ? pos : pos + '.',
+          meaningCn: lines[i],
+          examples: [],
+        });
+      }
     } else {
       // 没有词性前缀，使用清理后的 pos 或留空
       definitions.push({
         pos: cleanPos(ecdictResult.pos),
-        meaningCn: trimmed,
+        meaningCn: trimmedSemi,
         examples: [],
       });
     }
