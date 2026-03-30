@@ -115,14 +115,18 @@ export class ECDICTService {
     }
 
     try {
-      // 使用 IN 子句批量查询
-      const placeholders = words.map(() => '?').join(',');
-      const stmt = this.db.prepare(`SELECT * FROM stardict WHERE word IN (${placeholders}) COLLATE NOCASE`);
-      const rows = stmt.all(...words) as ECDICTEntry[];
+      // SQLite 对 IN 子句的参数数量有限制（通常 999 个），所以分批查询
+      const batchSize = 500;
+      for (let i = 0; i < words.length; i += batchSize) {
+        const batch = words.slice(i, i + batchSize);
+        const placeholders = batch.map(() => '?').join(',');
+        const stmt = this.db.prepare(`SELECT * FROM stardict WHERE word IN (${placeholders}) COLLATE NOCASE`);
+        const rows = stmt.all(...batch) as ECDICTEntry[];
 
-      for (const row of rows) {
-        const parsed = this.parseEntry(row);
-        result.set(parsed.word.toLowerCase(), parsed);
+        for (const row of rows) {
+          const parsed = this.parseEntry(row);
+          result.set(parsed.word.toLowerCase(), parsed);
+        }
       }
     } catch (error) {
       console.error('[ECDICT] Batch lookup error:', error);
