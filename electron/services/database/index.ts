@@ -144,6 +144,16 @@ export class DatabaseService {
       )
     `);
 
+    // 废词本表 - 存放无效/错误单词
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS ignored_words (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        word TEXT NOT NULL UNIQUE,
+        source TEXT,
+        added_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )
+    `);
+
     // 电子书音频文件关联表 - 一个电子书可以对应多个音频文件
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS book_audio_files (
@@ -163,6 +173,7 @@ export class DatabaseService {
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_word_book_items_book_id ON word_book_items(word_book_id)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_reading_records_path ON reading_records(file_path)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_mastered_words_word ON mastered_words(word)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_ignored_words_word ON ignored_words(word)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_book_audio_files_book_path ON book_audio_files(book_path)`);
 
     // 迁移：为 word_book_items 添加复习相关字段
