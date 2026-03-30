@@ -289,55 +289,73 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     setDetailModalOpen(true);
   };
 
-  // 批量查询单词释义
+  // 批量查询单词释义 - 优先使用 ECDICT，其次本地数据库，最后 AI 接口
   const batchLoadDefinitions = async (words: ExtractedWord[]) => {
     setLoadingDefinitions(true);
     try {
-      // 分批查询，每批 10 个单词，避免过多并发
-      const batchSize = 10;
       const updatedWords = [...words];
-      
-      for (let i = 0; i < words.length; i += batchSize) {
-        const batch = words.slice(i, i + batchSize);
-        const promises = batch.map(async (item) => {
-          try {
-            // 先尝试从数据库查询
-            const wordFromDB = await window.electron.ipcRenderer.invoke('db:getWord', item.word.toLowerCase());
-            if (wordFromDB?.definitionCn) {
-              return { ...item, definitionCn: wordFromDB.definitionCn };
+      const wordList = words.map(w => w.word.toLowerCase());
+
+      // 第一步：尝试使用 ECDICT 批量查询
+      try {
+        const ecdictResult = await window.electron.ipcRenderer.invoke('ecdict:batchLookup', wordList);
+        if (ecdictResult?.success && ecdictResult.data) {
+          const ecdictData = ecdictResult.data;
+          for (let i = 0; i < updatedWords.length; i++) {
+            const word = updatedWords[i].word.toLowerCase();
+            if (ecdictData[word]?.definitionCn) {
+              updatedWords[i] = { ...updatedWords[i], definitionCn: ecdictData[word].definitionCn };
             }
-            // 数据库没有，尝试用基础查询接口
-            const result = await window.electron.ipcRenderer.invoke('ai:defineWordBasic', { word: item.word });
-            if (result?.success && result.data?.definitions?.[0]?.meaningCn) {
-              return { ...item, definitionCn: result.data.definitions[0].meaningCn };
-            }
-            return item;
-          } catch {
-            return item;
           }
-        });
-        
-        const results = await Promise.all(promises);
-        // 更新已查询的单词释义
-        for (let j = 0; j < results.length; j++) {
-          const index = i + j;
-          if (index < updatedWords.length) {
-            updatedWords[index] = results[j];
-          }
+          // 更新界面显示 ECDICT 查询结果
+          setExtractedWords([...updatedWords]);
+          setOriginalExtractedWords([...updatedWords]);
         }
+      } catch (error) {
+        console.log('ECDICT 查询失败，降级到本地数据库:', error);
+      }
+
+      // 第二步：对 ECDICT 未找到的单词，查询本地数据库和 AI
+      const missingWords = updatedWords.filter(w => !w.definitionCn);
+      if (missingWords.length > 0) {
+        // 分批查询，每批 10 个单词
+        const batchSize = 10;
         
-        // 每完成一批就更新界面，让用户看到进度
-        setExtractedWords([...updatedWords]);
-        setOriginalExtractedWords(prev => {
-          const newOriginal = [...prev];
-          for (let j = 0; j < results.length; j++) {
-            const index = i + j;
-            if (index < newOriginal.length) {
-              newOriginal[index] = results[j];
+        for (let i = 0; i < missingWords.length; i += batchSize) {
+          const batch = missingWords.slice(i, i + batchSize);
+          const promises = batch.map(async (item) => {
+            try {
+              // 先尝试从本地数据库查询
+              const wordFromDB = await window.electron.ipcRenderer.invoke('db:getWord', item.word.toLowerCase());
+              if (wordFromDB?.definitionCn) {
+                return { word: item.word, definitionCn: wordFromDB.definitionCn };
+              }
+              // 本地数据库没有，尝试用基础查询接口
+              const result = await window.electron.ipcRenderer.invoke('ai:defineWordBasic', { word: item.word });
+              if (result?.success && result.data?.definitions?.[0]?.meaningCn) {
+                return { word: item.word, definitionCn: result.data.definitions[0].meaningCn };
+              }
+              return null;
+            } catch {
+              return null;
+            }
+          });
+          
+          const results = await Promise.all(promises);
+          // 更新已查询的单词释义
+          for (const result of results) {
+            if (result) {
+              const index = updatedWords.findIndex(w => w.word === result.word);
+              if (index !== -1) {
+                updatedWords[index] = { ...updatedWords[index], definitionCn: result.definitionCn };
+              }
             }
           }
-          return newOriginal;
-        });
+          
+          // 每完成一批就更新界面，让用户看到进度
+          setExtractedWords([...updatedWords]);
+          setOriginalExtractedWords([...updatedWords]);
+        }
       }
     } catch (error) {
       console.error('批量加载释义失败:', error);

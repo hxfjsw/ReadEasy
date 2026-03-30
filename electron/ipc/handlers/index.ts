@@ -6,6 +6,7 @@ import { AIService } from '../../services/ai';
 import { ParserService } from '../../services/parser';
 import { GoogleTranslationService } from '../../services/translation';
 import { YoudaoDictionaryService } from '../../services/youdao-dict';
+import { ecdictService } from '../../services/ecdict';
 import { registerPracticeHandlers } from './practice';
 
 export function registerIPCHandlers(
@@ -15,6 +16,12 @@ export function registerIPCHandlers(
   const parserService = new ParserService();
   const googleTranslateService = new GoogleTranslationService();
   const youdaoDictionaryService = new YoudaoDictionaryService();
+  
+  // 初始化 ECDICT 服务 - 从设置中读取路径
+  const ecdictPath = dbService.getSetting('ecdict.path');
+  if (ecdictPath) {
+    ecdictService.setDatabasePath(ecdictPath);
+  }
   
   console.log('[IPC] Registering IPC handlers...');
   
@@ -571,6 +578,93 @@ export function registerIPCHandlers(
 
   // 注册单词练习相关 handlers
   registerPracticeHandlers(dbService, aiService);
+
+  // ===== ECDICT 词典服务 =====
+  
+  // 设置 ECDICT 数据库路径
+  ipcMain.handle('ecdict:setPath', async (_, dbPath: string) => {
+    console.log('[IPC] ecdict:setPath called:', dbPath);
+    try {
+      const success = ecdictService.setDatabasePath(dbPath);
+      if (success) {
+        // 保存到设置
+        dbService.setSetting('ecdict.path', dbPath);
+        dbService.setSetting('ecdict.enabled', 'true');
+      }
+      return { success, path: dbPath };
+    } catch (error: any) {
+      console.error('[IPC] ecdict:setPath error:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
+  // 获取 ECDICT 数据库路径
+  ipcMain.handle('ecdict:getPath', async () => {
+    console.log('[IPC] ecdict:getPath called');
+    return {
+      path: ecdictService.getDatabasePath(),
+      available: ecdictService.isAvailable(),
+    };
+  });
+
+  // 测试 ECDICT 连接
+  ipcMain.handle('ecdict:test', async () => {
+    console.log('[IPC] ecdict:test called');
+    return ecdictService.testConnection();
+  });
+
+  // 查询单个单词
+  ipcMain.handle('ecdict:lookup', async (_, word: string) => {
+    console.log('[IPC] ecdict:lookup called:', word);
+    try {
+      const result = ecdictService.lookup(word);
+      return { success: true, data: result };
+    } catch (error: any) {
+      console.error('[IPC] ecdict:lookup error:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
+  // 批量查询单词
+  ipcMain.handle('ecdict:batchLookup', async (_, words: string[]) => {
+    console.log('[IPC] ecdict:batchLookup called, words count:', words.length);
+    try {
+      const result = ecdictService.batchLookup(words);
+      // 将 Map 转换为普通对象以便序列化
+      const obj: Record<string, any> = {};
+      result.forEach((value, key) => {
+        obj[key] = value;
+      });
+      return { success: true, data: obj };
+    } catch (error: any) {
+      console.error('[IPC] ecdict:batchLookup error:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
+  // 搜索单词
+  ipcMain.handle('ecdict:search', async (_, query: string, limit?: number) => {
+    console.log('[IPC] ecdict:search called:', query);
+    try {
+      const result = ecdictService.search(query, limit || 10);
+      return { success: true, data: result };
+    } catch (error: any) {
+      console.error('[IPC] ecdict:search error:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
+  // 获取 ECDICT 统计信息
+  ipcMain.handle('ecdict:stats', async () => {
+    console.log('[IPC] ecdict:stats called');
+    try {
+      const stats = ecdictService.getStats();
+      return { success: true, data: stats };
+    } catch (error: any) {
+      console.error('[IPC] ecdict:stats error:', error);
+      return { success: false, message: error.message };
+    }
+  });
   
   console.log('[IPC] All IPC handlers registered');
 }

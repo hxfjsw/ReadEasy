@@ -79,6 +79,15 @@ export interface IPCChannels {
   'window:minimize': () => void;
   'window:maximize': () => void;
   'window:close': () => void;
+  
+  // ECDICT 词典服务
+  'ecdict:setPath': (dbPath: string) => Promise<{ success: boolean; path?: string; message?: string }>;
+  'ecdict:getPath': () => Promise<{ path: string; available: boolean }>;
+  'ecdict:test': () => Promise<{ success: boolean; message: string }>;
+  'ecdict:lookup': (word: string) => Promise<{ success: boolean; data?: any; message?: string }>;
+  'ecdict:batchLookup': (words: string[]) => Promise<{ success: boolean; data?: Record<string, any>; message?: string }>;
+  'ecdict:search': (query: string, limit?: number) => Promise<{ success: boolean; data?: any[]; message?: string }>;
+  'ecdict:stats': () => Promise<{ success: boolean; data?: { totalWords: number } | null; message?: string }>;
 }
 
 // 暴露API到渲染进程

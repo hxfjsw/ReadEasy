@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Select, Slider, Input, Button, Tabs, message, InputNumber, Space, Table, Popconfirm, Switch, Collapse, Tag } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, CheckOutlined } from '@ant-design/icons';
+import { Card, Form, Select, Slider, Input, Button, Tabs, message, InputNumber, Space, Table, Popconfirm, Switch, Collapse, Tag, Divider } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, CheckOutlined, FolderOpenOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useSettingsStore } from '../stores/settingsStore';
 import { VocabularyLevelLabels, AIConfig } from '../types';
 
@@ -13,6 +13,12 @@ const SettingsPage: React.FC = () => {
   const [testLoading, setTestLoading] = useState(false);
   const [editingConfig, setEditingConfig] = useState<AIConfig | null>(null);
   const [showAIForm, setShowAIForm] = useState(false);
+  
+  // ECDICT 配置状态
+  const [ecdictPath, setEcdictPath] = useState('');
+  const [ecdictAvailable, setEcdictAvailable] = useState(false);
+  const [ecdictLoading, setEcdictLoading] = useState(false);
+  const [ecdictStats, setEcdictStats] = useState<{ totalWords: number } | null>(null);
 
   const {
     vocabularyLevel,
@@ -33,6 +39,84 @@ const SettingsPage: React.FC = () => {
     deleteAIConfig,
     loadAIConfigs,
   } = useSettingsStore();
+
+  // 加载 ECDICT 配置
+  useEffect(() => {
+    loadEcdictConfig();
+  }, []);
+
+  const loadEcdictConfig = async () => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('ecdict:getPath');
+      setEcdictPath(result.path || '');
+      setEcdictAvailable(result.available);
+      if (result.available) {
+        const stats = await window.electron.ipcRenderer.invoke('ecdict:stats');
+        if (stats?.success && stats.data) {
+          setEcdictStats(stats.data);
+        }
+      }
+    } catch (error) {
+      console.error('加载 ECDICT 配置失败:', error);
+    }
+  };
+
+  const handleSelectEcdictPath = async () => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('file:open', {
+        filters: [{ name: 'SQLite Database', extensions: ['db', 'sqlite', 'sqlite3'] }],
+      });
+      if (!result.canceled && result.filePaths.length > 0) {
+        const selectedPath = result.filePaths[0];
+        setEcdictPath(selectedPath);
+      }
+    } catch (error) {
+      message.error('选择文件失败');
+    }
+  };
+
+  const handleSaveEcdictPath = async () => {
+    if (!ecdictPath) {
+      message.warning('请先选择 ECDICT 数据库文件');
+      return;
+    }
+    setEcdictLoading(true);
+    try {
+      const result = await window.electron.ipcRenderer.invoke('ecdict:setPath', ecdictPath);
+      if (result.success) {
+        message.success('ECDICT 配置已保存');
+        setEcdictAvailable(true);
+        // 加载统计信息
+        const stats = await window.electron.ipcRenderer.invoke('ecdict:stats');
+        if (stats?.success && stats.data) {
+          setEcdictStats(stats.data);
+        }
+      } else {
+        message.error(result.message || '保存失败');
+        setEcdictAvailable(false);
+      }
+    } catch (error) {
+      message.error('保存失败');
+    } finally {
+      setEcdictLoading(false);
+    }
+  };
+
+  const handleTestEcdict = async () => {
+    setEcdictLoading(true);
+    try {
+      const result = await window.electron.ipcRenderer.invoke('ecdict:test');
+      if (result.success) {
+        message.success(result.message);
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error('测试失败');
+    } finally {
+      setEcdictLoading(false);
+    }
+  };
 
   useEffect(() => {
     form.setFieldsValue({
@@ -284,6 +368,77 @@ const SettingsPage: React.FC = () => {
                 </Button>
               </Form.Item>
             </Form>
+          </Card>
+        </TabPane>
+
+        <TabPane tab="词典配置" key="dictionary">
+          <Card title="ECDICT 离线词典" className="mb-4">
+            <div className="space-y-4">
+              <div className="text-gray-600 text-sm">
+                <p>ECDICT 是一个开源的英汉离线词典数据库，包含超过 50 万个单词的释义。</p>
+                <p>配置后，提取单词时会优先使用 ECDICT 查询释义，速度更快且无需联网。</p>
+              </div>
+              
+              <Divider />
+              
+              <Form layout="vertical">
+                <Form.Item label="数据库文件路径">
+                  <Space className="w-full">
+                    <Input
+                      value={ecdictPath}
+                      onChange={(e) => setEcdictPath(e.target.value)}
+                      placeholder="例如：D:\\stardict.db"
+                      style={{ width: 400 }}
+                    />
+                    <Button icon={<FolderOpenOutlined />} onClick={handleSelectEcdictPath}>
+                      浏览
+                    </Button>
+                  </Space>
+                </Form.Item>
+
+                <Form.Item>
+                  <Space>
+                    <Button 
+                      type="primary" 
+                      onClick={handleSaveEcdictPath} 
+                      loading={ecdictLoading}
+                      disabled={!ecdictPath}
+                    >
+                      保存配置
+                    </Button>
+                    <Button 
+                      onClick={handleTestEcdict} 
+                      loading={ecdictLoading}
+                      disabled={!ecdictAvailable}
+                    >
+                      测试连接
+                    </Button>
+                    <Button 
+                      icon={<ReloadOutlined />} 
+                      onClick={loadEcdictConfig}
+                    >
+                      刷新状态
+                    </Button>
+                  </Space>
+                </Form.Item>
+              </Form>
+
+              <div className="bg-gray-50 p-4 rounded">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-gray-600">状态：</span>
+                  {ecdictAvailable ? (
+                    <Tag color="success">已连接</Tag>
+                  ) : (
+                    <Tag color="error">未连接</Tag>
+                  )}
+                </div>
+                {ecdictStats && (
+                  <div className="text-gray-600">
+                    词库数量：<strong>{ecdictStats.totalWords.toLocaleString()}</strong> 个单词
+                  </div>
+                )}
+              </div>
+            </div>
           </Card>
         </TabPane>
 
