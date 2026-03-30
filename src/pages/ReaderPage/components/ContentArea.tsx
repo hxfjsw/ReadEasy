@@ -329,7 +329,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
         }
         
         return (
-          <p key={`line-${lineIndex}`} className="my-0 leading-relaxed">
+          <p key={`line-${lineIndex}`} className="my-0">
             {elements}
           </p>
         );
