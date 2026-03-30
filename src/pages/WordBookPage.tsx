@@ -1,7 +1,93 @@
 import React, { useState, useEffect } from 'react';
-import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input, Divider, Pagination } from 'antd';
-import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined, SoundOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Card, List, Tag, Button, Empty, message, Popconfirm, Modal, Form, Input, Divider, Pagination, Dropdown } from 'antd';
+import { BookOutlined, DeleteOutlined, ExportOutlined, PlusOutlined, FileTextOutlined, SoundOutlined, CheckCircleOutlined, ReloadOutlined, PlayCircleOutlined, DownOutlined } from '@ant-design/icons';
 import { WordBook, WordBookItem } from '../types';
+import { PracticePage } from '@/pages/WordBookPage/practice';
+
+// 练习按钮组件
+type PracticeFilter = 'all' | 'new' | 'review' | 'wrong';
+
+interface PracticeOption {
+  key: PracticeFilter;
+  label: string;
+  description: string;
+}
+
+const PRACTICE_OPTIONS: PracticeOption[] = [
+  { key: 'all', label: 'Practice All', description: 'Practice all words in the book' },
+  { key: 'new', label: 'New Words Only', description: "Focus on words you haven't practiced" },
+  { key: 'review', label: 'Review Mode', description: "Practice words you're learning" },
+  { key: 'wrong', label: 'Wrong Words', description: 'Focus on words you got wrong' },
+];
+
+interface PracticeButtonProps {
+  wordBookId: number;
+  wordBookName: string;
+  wordCount: number;
+  disabled?: boolean;
+}
+
+const PracticeButton: React.FC<PracticeButtonProps> = ({
+  wordBookId,
+  wordBookName,
+  wordCount,
+  disabled = false,
+}) => {
+  const [isPracticeOpen, setIsPracticeOpen] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<PracticeFilter>('all');
+
+  const handleStartPractice = (filter: PracticeFilter) => {
+    setSelectedFilter(filter);
+    setIsPracticeOpen(true);
+  };
+
+  const handleClosePractice = () => {
+    setIsPracticeOpen(false);
+  };
+
+  const dropdownItems = PRACTICE_OPTIONS.map(option => ({
+    key: option.key,
+    label: (
+      <div className="py-1">
+        <div className="font-medium">{option.label}</div>
+        <div className="text-xs text-gray-500">{option.description}</div>
+      </div>
+    ),
+    onClick: () => handleStartPractice(option.key),
+  }));
+
+  return (
+    <>
+      <Dropdown
+        menu={{ items: dropdownItems }}
+        placement="bottomRight"
+        disabled={disabled || wordCount === 0}
+      >
+        <Button
+          type="primary"
+          icon={<PlayCircleOutlined />}
+          disabled={disabled || wordCount === 0}
+          className="flex items-center"
+        >
+          <span>Practice</span>
+          <DownOutlined className="ml-1 text-xs" />
+        </Button>
+      </Dropdown>
+
+      {isPracticeOpen && (
+        <PracticePage
+          wordBookId={wordBookId}
+          wordBookName={wordBookName}
+          mode="context"
+          count={Math.min(20, wordCount)}
+          filter={selectedFilter}
+          onClose={handleClosePractice}
+          onComplete={handleClosePractice}
+        />
+      )}
+    </>
+  );
+};
 
 const WordBookPage: React.FC = () => {
   const [wordBooks, setWordBooks] = useState<WordBook[]>([]);
@@ -378,6 +464,13 @@ const WordBookPage: React.FC = () => {
                 <Tag className="ml-2">{words.length} 个单词</Tag>
               </h2>
               <div className="flex gap-2">
+                {selectedBookId && (
+                  <PracticeButton
+                    wordBookId={selectedBookId}
+                    wordBookName={wordBooks.find((b) => b.id === selectedBookId)?.name || ''}
+                    wordCount={words.length}
+                  />
+                )}
                 <Button 
                   icon={<ReloadOutlined />}
                   onClick={handleRefreshWords}

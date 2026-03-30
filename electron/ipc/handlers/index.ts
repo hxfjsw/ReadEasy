@@ -6,6 +6,7 @@ import { AIService } from '../../services/ai';
 import { ParserService } from '../../services/parser';
 import { GoogleTranslationService } from '../../services/translation';
 import { YoudaoDictionaryService } from '../../services/youdao-dict';
+import { registerPracticeHandlers } from './practice';
 
 export function registerIPCHandlers(
   dbService: DatabaseService,
@@ -567,6 +568,9 @@ export function registerIPCHandlers(
       return { success: false, message: error.message };
     }
   });
+
+  // 注册单词练习相关 handlers
+  registerPracticeHandlers(dbService, aiService);
   
   console.log('[IPC] All IPC handlers registered');
 }

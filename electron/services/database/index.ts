@@ -5,6 +5,7 @@ import * as schema from './schema';
 import path from 'path';
 import { app } from 'electron';
 import fs from 'fs';
+import { PracticeDatabaseService } from './practice';
 
 export class DatabaseService {
   private db: Database.Database;
@@ -172,6 +173,11 @@ export class DatabaseService {
 
     // 迁移：为 words 表添加扩展字段
     this.migrateWords();
+
+    // 迁移：创建练习相关表
+    const practiceDb = new PracticeDatabaseService(this.db);
+    practiceDb.createTables();
+    practiceDb.migrateProficiencyFields();
   }
 
   private migrateWords(): void {

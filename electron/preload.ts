@@ -64,6 +64,16 @@ export interface IPCChannels {
   
   // 翻译服务
   'translate:sentence': (params: { text: string; targetLang?: string }) => Promise<any>;
+
+  // 单词练习
+  'practice:createSession': (params: any) => Promise<any>;
+  'practice:getWords': (params: any) => Promise<any>;
+  'practice:generateQuestions': (params: any) => Promise<any>;
+  'practice:recordAnswer': (params: any) => Promise<any>;
+  'practice:completeSession': (params: any) => Promise<any>;
+  'practice:getStats': (wordBookId?: number) => Promise<any>;
+  'practice:getWordHistory': (wordId: number) => Promise<any>;
+  'practice:generateDistractors': (params: any) => Promise<any>;
   
   // 窗口控制
   'window:minimize': () => void;
