@@ -166,9 +166,10 @@ export class ECDICTService {
     let phoneticUk: string | undefined;
 
     if (entry.phonetic) {
-      // ECDICT 的音标通常只有一个，我们将其作为美音
+      // ECDICT 的音标通常只有一个，同时作为美音和英音
       const cleanPhonetic = entry.phonetic.replace(/^\//, '').replace(/\/$/, '');
       phoneticUs = cleanPhonetic;
+      phoneticUk = cleanPhonetic;
     }
 
     // 解析中文释义

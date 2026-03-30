@@ -6,9 +6,73 @@ import { AIService } from '../../services/ai';
 import { ParserService } from '../../services/parser';
 import { GoogleTranslationService } from '../../services/translation';
 import { YoudaoDictionaryService } from '../../services/youdao-dict';
-import { ecdictService } from '../../services/ecdict';
+import { ecdictService, ECDICTDefinition } from '../../services/ecdict';
 import { WordExtractionService } from '../../services/word-extraction';
 import { registerPracticeHandlers } from './practice';
+
+/**
+ * 将 ECDICT 定义解析为按词性分割的格式
+ * ECDICT 的 definitionCn 格式如："n. 外面,外表,外界; a. 外面的,外表的,外界的; adv. 外面,外表,界"
+ */
+function parseECDICTDefinitions(ecdictResult: ECDICTDefinition): Array<{pos: string; meaningCn: string; examples: string[]}> {
+  const definitions: Array<{pos: string; meaningCn: string; examples: string[]}> = [];
+  
+  if (!ecdictResult.definitionCn) {
+    return definitions;
+  }
+  
+  // 按分号或换行分割不同的词性
+  const parts = ecdictResult.definitionCn.split(/;\s*|\n/).filter(p => p.trim());
+  
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    
+    // 匹配词性前缀，如 "n. ", "adj. ", "adv. " 等
+    const match = trimmed.match(/^([a-z]+\.?)\s+(.+)$/i);
+    if (match) {
+      const pos = match[1].trim();
+      const meaning = match[2].trim();
+      definitions.push({
+        pos: pos.endsWith('.') ? pos : pos + '.',
+        meaningCn: meaning,
+        examples: [],
+      });
+    } else {
+      // 没有词性前缀，作为整体
+      definitions.push({
+        pos: ecdictResult.pos || '',
+        meaningCn: trimmed,
+        examples: [],
+      });
+    }
+  }
+  
+  // 如果没有解析出任何定义，使用整个字符串
+  if (definitions.length === 0 && ecdictResult.definitionCn) {
+    definitions.push({
+      pos: ecdictResult.pos || '',
+      meaningCn: ecdictResult.definitionCn,
+      examples: [],
+    });
+  }
+  
+  return definitions;
+}
+
+/**
+ * 转换 ECDICT 结果为统一格式
+ */
+function convertECDICTToUnifiedFormat(ecdictResult: ECDICTDefinition) {
+  return {
+    word: ecdictResult.word,
+    // ECDICT 通常只有一个音标，同时作为美音和英音显示
+    phoneticUs: ecdictResult.phoneticUs,
+    phoneticUk: ecdictResult.phoneticUk || ecdictResult.phoneticUs,
+    definitions: parseECDICTDefinitions(ecdictResult),
+    level: ecdictResult.level,
+  };
+}
 
 export function registerIPCHandlers(
   dbService: DatabaseService,
@@ -362,17 +426,7 @@ export function registerIPCHandlers(
         if (ecdictResult) {
           console.log('[IPC] ai:defineWord ECDICT success');
           // 转换 ECDICT 格式为统一格式
-          const dictResult = {
-            word: ecdictResult.word,
-            phoneticUs: ecdictResult.phoneticUs,
-            phoneticUk: ecdictResult.phoneticUk,
-            definitions: ecdictResult.definitionCn ? [{
-              pos: ecdictResult.pos || '',
-              meaningCn: ecdictResult.definitionCn,
-              examples: [],
-            }] : [],
-            level: ecdictResult.level,
-          };
+          const dictResult = convertECDICTToUnifiedFormat(ecdictResult);
           // 如果有上下文且已配置 AI，补充上下文分析
           if (params.context) {
             try {
@@ -454,17 +508,7 @@ export function registerIPCHandlers(
         if (ecdictResult) {
           console.log('[IPC] ai:defineWordBasic ECDICT success');
           // 转换 ECDICT 格式为统一格式
-          const dictResult = {
-            word: ecdictResult.word,
-            phoneticUs: ecdictResult.phoneticUs,
-            phoneticUk: ecdictResult.phoneticUk,
-            definitions: ecdictResult.definitionCn ? [{
-              pos: ecdictResult.pos || '',
-              meaningCn: ecdictResult.definitionCn,
-              examples: [],
-            }] : [],
-            level: ecdictResult.level,
-          };
+          const dictResult = convertECDICTToUnifiedFormat(ecdictResult);
           return { success: true, data: dictResult, source: 'ecdict' };
         }
       } catch (ecdictError: any) {
