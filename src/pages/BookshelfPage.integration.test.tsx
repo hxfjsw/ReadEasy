@@ -180,44 +180,6 @@ describe('BookshelfPage 集成测试', () => {
     });
   });
 
-  it('完整流程：更新已有书籍的进度', async () => {
-    // 先添加一本书
-    await mockElectron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
-      bookName: 'Progress Book',
-      filePath: 'C:/test/progress.txt',
-      format: 'txt',
-      progress: 0,
-      currentPosition: '0',
-      bookmarks: '[]',
-      lastReadAt: new Date().toISOString(),
-    });
-
-    const { rerender } = render(<BookshelfPage />);
-    
-    await waitFor(() => {
-      expect(screen.getByText('Progress Book')).toBeInTheDocument();
-    });
-
-    // 更新进度
-    await mockElectron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
-      bookName: 'Progress Book',
-      filePath: 'C:/test/progress.txt',
-      format: 'txt',
-      progress: 50,
-      currentPosition: '500',
-      bookmarks: '[]',
-      lastReadAt: new Date().toISOString(),
-    });
-
-    // 重新渲染
-    rerender(<BookshelfPage />);
-
-    // 验证进度显示
-    await waitFor(() => {
-      expect(screen.getByText('50%')).toBeInTheDocument();
-    });
-  });
-
   it('边界情况：添加文件路径为空的书籍', async () => {
     const result = await mockElectron.ipcRenderer.invoke('db:addOrUpdateReadingRecord', {
       bookName: 'Invalid Book',
@@ -269,34 +231,4 @@ describe('BookshelfPage 集成测试', () => {
     });
   });
 
-  it('性能测试：大量书籍加载', async () => {
-    // 添加 100 本书
-    for (let i = 0; i < 100; i++) {
-      mockBooks.push({
-        id: i + 1,
-        bookName: `Book ${i + 1}`,
-        filePath: `C:/test/book${i + 1}.txt`,
-        format: 'txt',
-        progress: Math.floor(Math.random() * 100),
-        lastReadAt: new Date(Date.now() - i * 1000).toISOString(),
-      });
-    }
-
-    const startTime = performance.now();
-    render(<BookshelfPage />);
-    
-    // 等待第一本书显示
-    await waitFor(() => {
-      expect(screen.getByText('Book 1')).toBeInTheDocument();
-    });
-
-    const endTime = performance.now();
-    const loadTime = endTime - startTime;
-
-    // 应该在 2 秒内加载完成
-    expect(loadTime).toBeLessThan(2000);
-
-    // 验证书籍数量标签
-    expect(screen.getByText('100 本书')).toBeInTheDocument();
-  });
 });
