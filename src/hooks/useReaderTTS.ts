@@ -7,6 +7,7 @@ export interface CurrentWord {
   charIndex: number;
   charLength: number;
   wordIndex: number; // 在句子中的第几个单词（从0开始）
+  sentenceIndex: number; // 当前朗读的是第几个句子（从0开始）
 }
 
 export function useReaderTTS() {
@@ -44,7 +45,7 @@ export function useReaderTTS() {
   }, [isPaused]);
 
   // 从字符位置提取当前单词，并计算其在句子中的单词索引
-  const extractWordAtPosition = useCallback((text: string, charIndex: number): CurrentWord | null => {
+  const extractWordAtPosition = useCallback((text: string, charIndex: number, sentenceIndex: number): CurrentWord | null => {
     // 找到当前单词的开始位置
     let start = charIndex;
     while (start > 0 && /[a-zA-Z']/.test(text[start - 1])) {
@@ -74,6 +75,7 @@ export function useReaderTTS() {
       charIndex: start,
       charLength: end - start,
       wordIndex,
+      sentenceIndex, // 传入当前句子索引
     };
   }, []);
 
@@ -97,10 +99,10 @@ export function useReaderTTS() {
     // 监听单词边界事件（逐词高亮）
     utterance.onboundary = (event) => {
       if (event.name === 'word') {
-        const wordInfo = extractWordAtPosition(currentSentence, event.charIndex);
+        const wordInfo = extractWordAtPosition(currentSentence, event.charIndex, index);
         if (wordInfo) {
           setCurrentWord(wordInfo);
-          console.log('[TTS] 当前朗读单词:', wordInfo.word);
+          console.log('[TTS] 当前朗读单词:', wordInfo.word, '句子:', index, '单词索引:', wordInfo.wordIndex);
         }
       }
     };

@@ -161,6 +161,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           highlightedSentence={audio.highlightedSentence}
           similarityThreshold={settings.similarityThreshold}
           currentWord={tts.currentWord}
+          currentTTSSentenceIndex={tts.currentSentenceIndex}
           theme={settings.theme}
           onMouseUp={handleMouseUp}
           onFileSelect={file.handleFileSelect}

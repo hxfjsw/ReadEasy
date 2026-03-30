@@ -22,6 +22,7 @@ interface ContentAreaProps {
   highlightedSentence: HighlightedSentence | null;
   similarityThreshold: number;
   currentWord?: CurrentWord | null; // TTS 当前朗读的单词
+  currentTTSSentenceIndex?: number; // 当前 TTS 朗读的句子索引
   onMouseUp: () => void;
   onFileSelect: () => void;
   goToPreviousPage: () => void;
@@ -45,6 +46,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
   highlightedSentence,
   similarityThreshold,
   currentWord,
+  currentTTSSentenceIndex = -1,
   onMouseUp,
   onFileSelect,
   goToPreviousPage,
@@ -97,6 +99,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
                 highlightedSentence={highlightedSentence}
                 similarityThreshold={similarityThreshold}
                 currentWord={currentWord}
+                currentTTSSentenceIndex={currentTTSSentenceIndex}
                 onWordClick={onWordClick}
               />
             </div>
@@ -130,6 +133,7 @@ interface RenderContentProps {
   highlightedSentence: HighlightedSentence | null;
   similarityThreshold: number;
   currentWord?: CurrentWord | null;
+  currentTTSSentenceIndex?: number;
   onWordClick: (word: string, context: string) => void;
 }
 
@@ -170,6 +174,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
   highlightedSentence,
   similarityThreshold,
   currentWord,
+  currentTTSSentenceIndex = -1,
   onWordClick 
 }) => {
   // 将文本分割成段落/句子
@@ -224,16 +229,19 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
             const shouldHighlight = highlightedSentence !== null && 
               checkShouldHighlight(currentSentence, highlightedSentence.text, similarityThreshold);
             
+            const thisSentenceIndex = sentenceIndex++;
             elements.push(
               <SentenceSpan 
-                key={`sent-${sentenceIndex++}`}
+                key={`sent-${thisSentenceIndex}`}
                 sentence={currentSentence}
+                sentenceIndex={thisSentenceIndex}
                 vocabularyLevel={vocabularyLevel}
                 knownWords={knownWords}
                 vocabularyAnalysis={vocabularyAnalysis}
                 onWordClick={onWordClick}
                 isHighlighted={shouldHighlight}
                 currentWord={currentWord}
+                currentTTSSentenceIndex={currentTTSSentenceIndex}
               />
             );
             currentSentence = '';
@@ -243,16 +251,19 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
               const shouldHighlight = highlightedSentence !== null && 
                 checkShouldHighlight(currentSentence, highlightedSentence.text, similarityThreshold);
               
+              const thisSentenceIndex = sentenceIndex++;
               elements.push(
                 <SentenceSpan 
-                  key={`sent-${sentenceIndex++}`}
+                  key={`sent-${thisSentenceIndex}`}
                   sentence={currentSentence}
+                  sentenceIndex={thisSentenceIndex}
                   vocabularyLevel={vocabularyLevel}
                   knownWords={knownWords}
                   vocabularyAnalysis={vocabularyAnalysis}
                   onWordClick={onWordClick}
                   isHighlighted={shouldHighlight}
                   currentWord={currentWord}
+                  currentTTSSentenceIndex={currentTTSSentenceIndex}
                 />
               );
             }
@@ -265,16 +276,19 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
           const shouldHighlight = highlightedSentence !== null && 
             checkShouldHighlight(currentSentence, highlightedSentence.text, similarityThreshold);
           
+          const thisSentenceIndex = sentenceIndex++;
           elements.push(
             <SentenceSpan 
-              key={`sent-${sentenceIndex++}`}
+              key={`sent-${thisSentenceIndex}`}
               sentence={currentSentence}
+              sentenceIndex={thisSentenceIndex}
               vocabularyLevel={vocabularyLevel}
               knownWords={knownWords}
               vocabularyAnalysis={vocabularyAnalysis}
               onWordClick={onWordClick}
               isHighlighted={shouldHighlight}
               currentWord={currentWord}
+              currentTTSSentenceIndex={currentTTSSentenceIndex}
             />
           );
         }
@@ -292,29 +306,32 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
 // 句子组件（支持高亮）
 interface SentenceSpanProps {
   sentence: string;
+  sentenceIndex: number; // 句子在全文中的索引
   vocabularyLevel: string;
   knownWords: Set<string>;
   vocabularyAnalysis: Map<string, string>;
   onWordClick: (word: string, context: string) => void;
   isHighlighted: boolean;
   currentWord?: CurrentWord | null;
+  currentTTSSentenceIndex?: number; // 当前 TTS 朗读的句子索引
 }
 
 const SentenceSpan: React.FC<SentenceSpanProps> = ({
   sentence,
+  sentenceIndex,
   vocabularyLevel,
   knownWords,
   vocabularyAnalysis,
   onWordClick,
   isHighlighted,
   currentWord,
+  currentTTSSentenceIndex = -1,
 }) => {
   // 将句子分割成单词和非单词
   const parts = sentence.split(/(\s+|[.,!?;:"()[\]{}])/);
   
-  // 检查当前句子是否包含当前朗读的单词
-  const sentenceLower = sentence.toLowerCase();
-  const isCurrentSentence = currentWord && sentenceLower.includes(currentWord.word);
+  // 精确匹配：只有当当前句子的索引等于 TTS 正在朗读的句子索引时才高亮
+  const isCurrentSentence = currentWord !== null && currentTTSSentenceIndex === sentenceIndex;
   
   // 只有当单词和索引都匹配时才高亮
   // 记录当前已渲染的纯字母单词计数（用于匹配 wordIndex）
@@ -350,10 +367,14 @@ const SentenceSpan: React.FC<SentenceSpanProps> = ({
         const isUnknown = !isKnown && wordLevel && wordLevelIndex > userLevelIndex;
         const levelColor = wordLevel ? levelColors[wordLevel] : '';
         
-        // 检查是否是当前 TTS 朗读的单词（必须同时匹配单词内容和索引）
-        const isCurrentWord = currentWord && 
+        // 检查是否是当前 TTS 朗读的单词
+        // 必须同时满足：
+        // 1. 是当前正在朗读的句子 (currentTTSSentenceIndex === sentenceIndex)
+        // 2. 单词内容匹配
+        // 3. 单词在句子中的索引匹配
+        const isCurrentWord = isCurrentSentence && 
+          currentWord != null &&
           lowerWord === currentWord.word && 
-          isCurrentSentence &&
           thisWordIndex === currentWord.wordIndex;
         
         return (
