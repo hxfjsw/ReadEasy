@@ -1,7 +1,24 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { message } from 'antd';
-import { pipeline, AutomaticSpeechRecognitionPipeline } from '@xenova/transformers';
+import { pipeline, AutomaticSpeechRecognitionPipeline, env } from '@xenova/transformers';
 import { findMatchByAnchorPoint } from '../utils/anchorMatching';
+
+// 配置 Transformers.js 使用 WebGPU（如果可用）
+// 优先使用 GPU 加速，不支持时自动回退到 CPU
+env.backends.onnx.wasm.numThreads = navigator.hardwareConcurrency || 4;
+
+// 检查 WebGPU 是否可用
+const isWebGPUAvailable = async (): Promise<boolean> => {
+  try {
+    if (typeof navigator !== 'undefined' && 'gpu' in navigator) {
+      const adapter = await (navigator as unknown as { gpu: { requestAdapter: () => Promise<unknown> } }).gpu.requestAdapter();
+      return !!adapter;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
 
 // 音频分段信息
 interface AudioSegment {
@@ -51,9 +68,30 @@ export function useWhisper(segmentDuration: number = 5) {
     console.log('[Whisper] 正在加载模型...');
     
     try {
+      // 检测 WebGPU 是否可用
+      const webgpuAvailable = await isWebGPUAvailable();
+      console.log(`[Whisper] WebGPU 可用: ${webgpuAvailable}`);
+      
+      // 配置 pipeline 选项
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pipelineOptions: Record<string, unknown> = {};
+      
+      if (webgpuAvailable) {
+        // 使用 WebGPU 加速
+        pipelineOptions.dtype = 'fp16'; // 半精度浮点数，GPU 更快
+        pipelineOptions.device = 'webgpu';
+        console.log('[Whisper] 使用 WebGPU (显卡) 加速');
+      } else {
+        // 回退到 CPU
+        pipelineOptions.device = 'cpu';
+        console.log('[Whisper] WebGPU 不可用，使用 CPU');
+      }
+      
       const transcriber = await pipeline(
         'automatic-speech-recognition',
-        'Xenova/whisper-tiny.en'
+        'Xenova/whisper-tiny.en',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        pipelineOptions as any
       );
       
       whisperPipelineRef.current = transcriber;

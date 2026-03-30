@@ -160,6 +160,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           vocabularyAnalysis={vocab.vocabularyAnalysis}
           highlightedSentence={audio.highlightedSentence}
           similarityThreshold={settings.similarityThreshold}
+          currentWord={tts.currentWord}
           theme={settings.theme}
           onMouseUp={handleMouseUp}
           onFileSelect={file.handleFileSelect}

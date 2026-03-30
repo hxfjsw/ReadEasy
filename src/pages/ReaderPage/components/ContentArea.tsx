@@ -3,6 +3,7 @@ import { Spin, Empty, Progress, Button, Tooltip } from 'antd';
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { LoadingState } from '../../../types/reader';
 import { HighlightedSentence } from '../../../hooks/useReaderAudio';
+import { CurrentWord } from '../../../hooks/useReaderTTS';
 import { findMatchByAnchorPoint } from '../../../utils/anchorMatching';
 
 interface ContentAreaProps {
@@ -20,6 +21,7 @@ interface ContentAreaProps {
   vocabularyAnalysis: Map<string, string>;
   highlightedSentence: HighlightedSentence | null;
   similarityThreshold: number;
+  currentWord?: CurrentWord | null; // TTS 当前朗读的单词
   onMouseUp: () => void;
   onFileSelect: () => void;
   goToPreviousPage: () => void;
@@ -42,6 +44,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
   vocabularyAnalysis,
   highlightedSentence,
   similarityThreshold,
+  currentWord,
   onMouseUp,
   onFileSelect,
   goToPreviousPage,
@@ -93,6 +96,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
                 vocabularyAnalysis={vocabularyAnalysis}
                 highlightedSentence={highlightedSentence}
                 similarityThreshold={similarityThreshold}
+                currentWord={currentWord}
                 onWordClick={onWordClick}
               />
             </div>
@@ -125,6 +129,7 @@ interface RenderContentProps {
   vocabularyAnalysis: Map<string, string>;
   highlightedSentence: HighlightedSentence | null;
   similarityThreshold: number;
+  currentWord?: CurrentWord | null;
   onWordClick: (word: string, context: string) => void;
 }
 
@@ -164,6 +169,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
   vocabularyAnalysis, 
   highlightedSentence,
   similarityThreshold,
+  currentWord,
   onWordClick 
 }) => {
   // 将文本分割成段落/句子
@@ -227,6 +233,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
                 vocabularyAnalysis={vocabularyAnalysis}
                 onWordClick={onWordClick}
                 isHighlighted={shouldHighlight}
+                currentWord={currentWord}
               />
             );
             currentSentence = '';
@@ -245,6 +252,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
                   vocabularyAnalysis={vocabularyAnalysis}
                   onWordClick={onWordClick}
                   isHighlighted={shouldHighlight}
+                  currentWord={currentWord}
                 />
               );
             }
@@ -266,6 +274,7 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
               vocabularyAnalysis={vocabularyAnalysis}
               onWordClick={onWordClick}
               isHighlighted={shouldHighlight}
+              currentWord={currentWord}
             />
           );
         }
@@ -288,6 +297,7 @@ interface SentenceSpanProps {
   vocabularyAnalysis: Map<string, string>;
   onWordClick: (word: string, context: string) => void;
   isHighlighted: boolean;
+  currentWord?: CurrentWord | null;
 }
 
 const SentenceSpan: React.FC<SentenceSpanProps> = ({
@@ -297,15 +307,20 @@ const SentenceSpan: React.FC<SentenceSpanProps> = ({
   vocabularyAnalysis,
   onWordClick,
   isHighlighted,
+  currentWord,
 }) => {
   // 将句子分割成单词和非单词
   const parts = sentence.split(/(\s+|[.,!?;:"()[\]{}])/);
   
+  // 检查当前句子是否包含当前朗读的单词
+  const sentenceLower = sentence.toLowerCase();
+  const isCurrentSentence = currentWord && sentenceLower.includes(currentWord.word);
+  
   return (
     <span 
-      className={`transition-colors duration-500 rounded px-1 ${
+      className={`transition-colors duration-300 rounded px-1 ${
         isHighlighted 
-          ? 'bg-yellow-300 text-black font-medium shadow-sm' 
+          ? 'bg-yellow-200 text-black font-medium shadow-sm' 
           : ''
       }`}
     >
@@ -324,11 +339,20 @@ const SentenceSpan: React.FC<SentenceSpanProps> = ({
         const isUnknown = !isKnown && wordLevel && wordLevelIndex > userLevelIndex;
         const levelColor = wordLevel ? levelColors[wordLevel] : '';
         
+        // 检查是否是当前 TTS 朗读的单词
+        const isCurrentWord = currentWord && lowerWord === currentWord.word && isCurrentSentence;
+        
         return (
           <Tooltip key={index} title={part}>
             <span
-              className={`cursor-pointer hover:bg-yellow-200 hover:text-blue-600 transition-colors rounded px-0.5 ${isUnknown ? 'border-b-2 border-red-400 bg-red-50' : ''}`}
-              style={levelColor ? { borderBottom: `2px solid ${levelColor}` } : {}}
+              className={`cursor-pointer hover:bg-yellow-200 hover:text-blue-600 transition-all duration-150 rounded px-0.5 ${
+                isUnknown ? 'border-b-2 border-red-400 bg-red-50' : ''
+              } ${
+                isCurrentWord 
+                  ? 'bg-blue-400 text-white font-bold shadow-md scale-110 inline-block' 
+                  : ''
+              }`}
+              style={levelColor && !isCurrentWord ? { borderBottom: `2px solid ${levelColor}` } : {}}
               onClick={() => onWordClick(part.toLowerCase(), context)}
             >
               {part}
