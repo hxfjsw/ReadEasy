@@ -93,6 +93,14 @@ export const masteredWords = sqliteTable('mastered_words', {
   addedAt: integer('added_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+// 废词本表 - 存放无效/错误单词
+export const ignoredWords = sqliteTable('ignored_words', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  word: text('word').notNull().unique(), // 单词本身（小写存储）
+  source: text('source'), // 来源，如书籍名称
+  addedAt: integer('added_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 // 电子书音频文件关联表 - 一个电子书可以对应多个音频文件
 export const bookAudioFiles = sqliteTable('book_audio_files', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -121,5 +129,7 @@ export type Setting = typeof settings.$inferSelect;
 export type NewSetting = typeof settings.$inferInsert;
 export type MasteredWord = typeof masteredWords.$inferSelect;
 export type NewMasteredWord = typeof masteredWords.$inferInsert;
+export type IgnoredWord = typeof ignoredWords.$inferSelect;
+export type NewIgnoredWord = typeof ignoredWords.$inferInsert;
 export type BookAudioFile = typeof bookAudioFiles.$inferSelect;
 export type NewBookAudioFile = typeof bookAudioFiles.$inferInsert;

@@ -377,6 +377,18 @@ const SettingsPage: React.FC = () => {
               <div className="text-gray-600 text-sm">
                 <p>ECDICT 是一个开源的英汉离线词典数据库，包含超过 50 万个单词的释义。</p>
                 <p>配置后，提取单词时会优先使用 ECDICT 查询释义，速度更快且无需联网。</p>
+                <p className="mt-2">
+                  <span className="text-blue-500">📥 词典文件下载：</span>
+                  <a 
+                    href="https://github.com/skywind3000/ECDICT/releases/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 underline"
+                  >
+                    https://github.com/skywind3000/ECDICT/releases/
+                  </a>
+                  <span className="text-gray-400 ml-2">（下载 stardict.db 文件即可）</span>
+                </p>
               </div>
               
               <Divider />
