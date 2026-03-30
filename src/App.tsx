@@ -125,7 +125,8 @@ function App() {
   return (
     <Layout className="h-screen">
       <Sider
-        width={200}
+        width={180}
+        collapsedWidth={64}
         theme="light"
         collapsible
         collapsed={collapsed}
@@ -133,14 +134,18 @@ function App() {
         trigger={null}
         className="border-r border-gray-200"
       >
-        <div className="h-16 flex items-center justify-center border-b border-gray-200 relative">
-          {!collapsed && <h1 className="text-xl font-bold text-primary-600">ReadEasy</h1>}
+        <div className={`h-16 flex items-center border-b border-gray-200 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
+          {!collapsed ? (
+            <h1 className="text-lg font-bold text-primary-600 truncate">ReadEasy</h1>
+          ) : (
+            <span className="text-lg font-bold text-primary-600">R</span>
+          )}
           <Button
             type="text"
+            size="small"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={() => setCollapsed(!collapsed)}
-            className="absolute right-2"
-            style={{ color: '#666' }}
+            style={{ color: '#666', padding: collapsed ? '0 4px' : undefined }}
           />
         </div>
         <Menu
