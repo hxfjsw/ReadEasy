@@ -11,6 +11,29 @@ import { WordExtractionService } from '../../services/word-extraction';
 import { registerPracticeHandlers } from './practice';
 
 /**
+ * 清理 pos 字段，过滤掉词频信息（如 "v:32/n:68"）
+ */
+function cleanPos(pos?: string): string {
+  if (!pos) return '';
+  
+  // 过滤掉包含数字和冒号的 pos（如 "v:32/n:68"）
+  if (/\d/.test(pos) || pos.includes(':')) {
+    return '';
+  }
+  
+  // 只保留标准词性缩写
+  const validPos = ['n', 'v', 'adj', 'adv', 'prep', 'conj', 'pron', 'art', 'int', 'num', 'modal', 'abbr', 'vt', 'vi'];
+  const parts = pos.split(/[\/;,]/).map(p => p.trim().toLowerCase().replace(/\.$/, ''));
+  const cleanParts = parts.filter(p => validPos.includes(p));
+  
+  return cleanParts.map(p => {
+    // 为词性添加标准后缀
+    if (p === 'vt' || p === 'vi') return p + '.';
+    return p + '.';
+  }).join('/') || '';
+}
+
+/**
  * 将 ECDICT 定义解析为按词性分割的格式
  * ECDICT 的 definitionCn 格式如："n. 外面,外表,外界; a. 外面的,外表的,外界的; adv. 外面,外表,界"
  */
@@ -28,7 +51,7 @@ function parseECDICTDefinitions(ecdictResult: ECDICTDefinition): Array<{pos: str
     const trimmed = part.trim();
     if (!trimmed) continue;
     
-    // 匹配词性前缀，如 "n. ", "adj. ", "adv. " 等
+    // 匹配词性前缀，如 "n. ", "adj. ", "adv. ", "vt. ", "vi. " 等
     const match = trimmed.match(/^([a-z]+\.?)\s+(.+)$/i);
     if (match) {
       const pos = match[1].trim();
@@ -39,9 +62,9 @@ function parseECDICTDefinitions(ecdictResult: ECDICTDefinition): Array<{pos: str
         examples: [],
       });
     } else {
-      // 没有词性前缀，作为整体
+      // 没有词性前缀，使用清理后的 pos 或留空
       definitions.push({
-        pos: ecdictResult.pos || '',
+        pos: cleanPos(ecdictResult.pos),
         meaningCn: trimmed,
         examples: [],
       });
@@ -51,7 +74,7 @@ function parseECDICTDefinitions(ecdictResult: ECDICTDefinition): Array<{pos: str
   // 如果没有解析出任何定义，使用整个字符串
   if (definitions.length === 0 && ecdictResult.definitionCn) {
     definitions.push({
-      pos: ecdictResult.pos || '',
+      pos: cleanPos(ecdictResult.pos),
       meaningCn: ecdictResult.definitionCn,
       examples: [],
     });
