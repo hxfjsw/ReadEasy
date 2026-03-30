@@ -148,6 +148,9 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         enableLazyMode={audio.enableLazyMode}
         onToggleLazyMode={() => audio.setEnableLazyMode(!audio.enableLazyMode)}
         isLazyTranscribing={audio.isLazyTranscribing}
+        enableHighlight={audio.enableHighlight}
+        onToggleHighlight={() => audio.setEnableHighlight(!audio.enableHighlight)}
+        currentSubtitle={audio.currentSubtitle}
       />
 
       <div className="flex flex-1 overflow-auto">

@@ -24,6 +24,10 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
   const [generationProgress, setGenerationProgress] = useState(0);
   // 实时字幕生成模式
   const [enableLazyMode, setEnableLazyMode] = useState(false);
+  // 字幕高亮开关（默认关闭）
+  const [enableHighlight, setEnableHighlight] = useState(false);
+  // 当前播放的字幕（用于显示）
+  const [currentSubtitle, setCurrentSubtitle] = useState<SubtitleItem | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastTranscribedSegmentRef = useRef<number>(-1);
@@ -134,7 +138,11 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
               whisper.getOrTranscribeAtTime(currentTime).then(subtitle => {
                 if (subtitle && subtitle.text && subtitle.index !== currentSubtitleRef.current?.index) {
                   currentSubtitleRef.current = subtitle;
-                  handleSubtitleMatch(subtitle);
+                  setCurrentSubtitle(subtitle);
+                  // 只在启用高亮时才高亮句子
+                  if (enableHighlight) {
+                    handleSubtitleMatch(subtitle);
+                  }
                 }
               });
             } else {
@@ -142,7 +150,11 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
               const subtitle = whisper.getSubtitleAtTime(currentTime);
               if (subtitle && subtitle.text && subtitle.index !== currentSubtitleRef.current?.index) {
                 currentSubtitleRef.current = subtitle;
-                handleSubtitleMatch(subtitle);
+                setCurrentSubtitle(subtitle);
+                // 只在启用高亮时才高亮句子
+                if (enableHighlight) {
+                  handleSubtitleMatch(subtitle);
+                }
               }
             }
           }
@@ -152,7 +164,7 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
         message.error('音频播放失败');
       });
     }
-  }, [isPlayingAudio, whisper, subtitles, enableLazyMode]);
+  }, [isPlayingAudio, whisper, subtitles, enableLazyMode, enableHighlight]);
 
   // 处理字幕匹配和高亮
   const handleSubtitleMatch = useCallback((subtitle: SubtitleItem) => {
@@ -311,5 +323,10 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     enableLazyMode,
     setEnableLazyMode,
     isLazyTranscribing: whisper.isLazyTranscribing,
+    // 字幕高亮开关
+    enableHighlight,
+    setEnableHighlight,
+    // 当前播放的字幕
+    currentSubtitle,
   };
 }

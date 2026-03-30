@@ -41,6 +41,11 @@ interface ToolbarProps {
   enableLazyMode?: boolean;
   onToggleLazyMode?: () => void;
   isLazyTranscribing?: boolean;
+  // 字幕高亮开关
+  enableHighlight?: boolean;
+  onToggleHighlight?: () => void;
+  // 当前播放的字幕
+  currentSubtitle?: { text: string; startTime: number; endTime: number } | null;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -81,10 +86,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   enableLazyMode = false,
   onToggleLazyMode,
   isLazyTranscribing = false,
+  // 字幕高亮开关
+  enableHighlight = false,
+  onToggleHighlight,
+  // 当前播放的字幕
+  currentSubtitle,
 }) => {
   const bgClass = theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
+  const subtitleBgClass = theme === 'dark' ? 'bg-gray-900 text-gray-200' : 'bg-gray-50 text-gray-800';
   
   return (
+    <>
     <div className={`h-14 border-b flex items-center px-4 justify-between ${bgClass}`}>
       <div className="flex items-center gap-2">
         <Button icon={<UploadOutlined />} onClick={onFileSelect} disabled={loadingState.isLoading}>
@@ -135,12 +147,23 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           enableLazyMode={enableLazyMode}
           onToggleLazyMode={onToggleLazyMode}
           isLazyTranscribing={isLazyTranscribing}
+          enableHighlight={enableHighlight}
+          onToggleHighlight={onToggleHighlight}
         />
         
         <Button icon={<SettingOutlined />} onClick={onSettingsClick} />
         <Button icon={theme === 'dark' ? <SunOutlined /> : <MoonOutlined />} onClick={onThemeToggle} />
       </div>
     </div>
+    
+    {/* 字幕显示行 */}
+    {audioFile && currentSubtitle?.text && (
+      <div className={`px-4 py-2 text-sm border-b ${subtitleBgClass}`}>
+        <span className="font-medium text-gray-500 mr-2">字幕:</span>
+        <span>{currentSubtitle.text}</span>
+      </div>
+    )}
+    </>
   );
 };
 
@@ -222,6 +245,9 @@ const AudioControl: React.FC<{
   enableLazyMode?: boolean;
   onToggleLazyMode?: () => void;
   isLazyTranscribing?: boolean;
+  // 字幕高亮开关
+  enableHighlight?: boolean;
+  onToggleHighlight?: () => void;
 }> = ({ 
   audioFile, 
   isPlayingAudio, 
@@ -243,6 +269,8 @@ const AudioControl: React.FC<{
   enableLazyMode = false,
   onToggleLazyMode,
   isLazyTranscribing = false,
+  enableHighlight = false,
+  onToggleHighlight,
 }) => {
   if (!audioFile) {
     return (
@@ -287,6 +315,16 @@ const AudioControl: React.FC<{
         title={enableLazyMode ? "实时字幕生成模式：读到哪里生成到哪里" : "预生成模式：先生成全部字幕再播放"}
       >
         {enableLazyMode ? "实时" : "预生成"}
+      </Button>
+      
+      {/* 高亮开关按钮 */}
+      <Button
+        type={enableHighlight ? "primary" : "default"}
+        size="small"
+        onClick={onToggleHighlight}
+        title={enableHighlight ? "已开启字幕高亮" : "已关闭字幕高亮"}
+      >
+        {enableHighlight ? "高亮开" : "高亮关"}
       </Button>
       
       {/* 字幕按钮 */}
