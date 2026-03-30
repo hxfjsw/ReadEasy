@@ -249,7 +249,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         bookPath={file.filePath}
         bookName={file.bookName}
         onClose={() => setAudioSelectorOpen(false)}
-        onSelect={(audioPath) => {
+        onSelect={(audioPath: string) => {
           // 使用已有的 handleSelectAudio 逻辑
           audio.handleSelectAudio(audioPath);
         }}
