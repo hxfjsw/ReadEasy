@@ -316,6 +316,10 @@ const SentenceSpan: React.FC<SentenceSpanProps> = ({
   const sentenceLower = sentence.toLowerCase();
   const isCurrentSentence = currentWord && sentenceLower.includes(currentWord.word);
   
+  // 只有当单词和索引都匹配时才高亮
+  // 记录当前已渲染的纯字母单词计数（用于匹配 wordIndex）
+  let renderedWordCount = 0;
+  
   return (
     <span 
       className={`transition-colors duration-300 rounded px-1 ${
@@ -325,7 +329,14 @@ const SentenceSpan: React.FC<SentenceSpanProps> = ({
       }`}
     >
       {parts.map((part, index) => {
-        if (!/^[a-zA-Z]+$/.test(part)) return <span key={index}>{part}</span>;
+        // 非字母部分直接渲染
+        if (!/^[a-zA-Z]+$/.test(part)) {
+          return <span key={index}>{part}</span>;
+        }
+        
+        // 这是一个单词，增加计数
+        const thisWordIndex = renderedWordCount;
+        renderedWordCount++;
         
         const contextStart = Math.max(0, index - 20);
         const contextEnd = Math.min(parts.length, index + 20);
@@ -339,8 +350,11 @@ const SentenceSpan: React.FC<SentenceSpanProps> = ({
         const isUnknown = !isKnown && wordLevel && wordLevelIndex > userLevelIndex;
         const levelColor = wordLevel ? levelColors[wordLevel] : '';
         
-        // 检查是否是当前 TTS 朗读的单词
-        const isCurrentWord = currentWord && lowerWord === currentWord.word && isCurrentSentence;
+        // 检查是否是当前 TTS 朗读的单词（必须同时匹配单词内容和索引）
+        const isCurrentWord = currentWord && 
+          lowerWord === currentWord.word && 
+          isCurrentSentence &&
+          thisWordIndex === currentWord.wordIndex;
         
         return (
           <Tooltip key={index} title={part}>

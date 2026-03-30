@@ -6,6 +6,7 @@ export interface CurrentWord {
   word: string;
   charIndex: number;
   charLength: number;
+  wordIndex: number; // 在句子中的第几个单词（从0开始）
 }
 
 export function useReaderTTS() {
@@ -42,30 +43,38 @@ export function useReaderTTS() {
     readSentence(0, sentences);
   }, [isPaused]);
 
-  // 从字符位置提取当前单词
+  // 从字符位置提取当前单词，并计算其在句子中的单词索引
   const extractWordAtPosition = useCallback((text: string, charIndex: number): CurrentWord | null => {
-    // 找到单词的开始位置
+    // 找到当前单词的开始位置
     let start = charIndex;
     while (start > 0 && /[a-zA-Z']/.test(text[start - 1])) {
       start--;
     }
     
-    // 找到单词的结束位置
+    // 找到当前单词的结束位置
     let end = charIndex;
     while (end < text.length && /[a-zA-Z']/.test(text[end])) {
       end++;
     }
     
-    if (start < end) {
-      const word = text.substring(start, end).toLowerCase();
-      return {
-        word,
-        charIndex: start,
-        charLength: end - start,
-      };
+    if (start >= end) {
+      return null;
     }
     
-    return null;
+    const word = text.substring(start, end).toLowerCase();
+    
+    // 计算这是第几个单词（只计算纯字母单词）
+    // 从句子开头到当前单词开始位置，统计有多少个单词
+    const textBeforeCurrent = text.substring(0, start);
+    const wordsBefore = textBeforeCurrent.match(/[a-zA-Z]+/g) || [];
+    const wordIndex = wordsBefore.length;
+    
+    return {
+      word,
+      charIndex: start,
+      charLength: end - start,
+      wordIndex,
+    };
   }, []);
 
   // 朗读单个句子
