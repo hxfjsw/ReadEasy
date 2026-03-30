@@ -47,14 +47,14 @@ export const OptionButton: React.FC<OptionButtonProps> = ({
       disabled={showResult}
       className={buttonClass}
     >
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-gray-400">[{optionKey}]</span>
-        <span className="text-base">{text}</span>
+      <div className="flex items-center gap-3 overflow-hidden">
+        <span className="text-sm font-medium text-gray-400 flex-shrink-0">[{optionKey}]</span>
+        <span className="text-base truncate" title={text}>{text}</span>
       </div>
 
       {/* 结果显示图标 */}
       {showResult && (
-        <span className="absolute right-4 top-1/2 -translate-y-1/2">
+        <span className="absolute right-4 top-1/2 -translate-y-1/2 flex-shrink-0">
           {isCorrect ? (
             <CheckOutlined className="text-green-500 text-lg" />
           ) : isSelected ? (

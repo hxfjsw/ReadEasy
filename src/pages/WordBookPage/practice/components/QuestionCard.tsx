@@ -18,9 +18,38 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   onSelect,
   onPlayAudio,
 }) => {
+  // 提取简洁的例句（处理JSON格式）
+  const extractSentence = (text: string): string => {
+    if (!text) return '';
+    // 如果是JSON格式，尝试提取其中的例句或翻译
+    if (text.trim().startsWith('[') || text.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(text);
+        // 如果是数组，尝试找第一个有examples的项
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          for (const item of parsed) {
+            if (item.examples && Array.isArray(item.examples) && item.examples.length > 0) {
+              // 返回第一个例句
+              return item.examples[0].replace(/\n/g, ' ').slice(0, 200);
+            }
+          }
+        }
+        // 如果有context字段
+        if (parsed.context) return parsed.context;
+        // 如果有sentence字段
+        if (parsed.sentence) return parsed.sentence;
+      } catch (e) {
+        // 解析失败，返回原文本
+      }
+    }
+    return text.slice(0, 200);
+  };
+
   // 高亮例句中的目标单词
   const renderSentence = () => {
-    if (!question.sentence) {
+    const sentence = extractSentence(question.sentence);
+    
+    if (!sentence) {
       return (
         <p className="text-lg text-gray-700 leading-relaxed">
           Example sentence with the word &quot;{question.highlightWord}&quot;.
@@ -30,7 +59,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 
     // 使用正则表达式高亮单词（忽略大小写）
     const regex = new RegExp(`\\b(${question.highlightWord})\\b`, 'gi');
-    const parts = question.sentence.split(regex);
+    const parts = sentence.split(regex);
 
     return (
       <p className="text-lg text-gray-700 leading-relaxed">

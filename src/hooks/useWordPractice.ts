@@ -101,18 +101,19 @@ export function useWordPractice() {
     }));
   }, [state.showResult]);
 
-  // 提交答案
-  const submitAnswer = useCallback(async () => {
-    if (!state.currentSelected || state.showResult) return;
+  // 提交答案（传入选中的答案，避免闭包问题）
+  const submitAnswer = useCallback(async (selectedKey?: string) => {
+    const answerToSubmit = selectedKey || state.currentSelected;
+    if (!answerToSubmit || state.showResult) return;
 
     const currentQuestion = state.questions[state.currentIndex];
-    const isCorrect = currentQuestion.correctAnswer === state.currentSelected;
+    const isCorrect = currentQuestion.correctAnswer === answerToSubmit;
     const timeSpent = Date.now() - state.questionStartTime;
 
     // 记录到本地状态
     const newAnswers = new Map(state.answers);
     newAnswers.set(currentQuestion.id, {
-      selected: state.currentSelected,
+      selected: answerToSubmit,
       isCorrect,
       timeSpent,
     });
@@ -131,7 +132,7 @@ export function useWordPractice() {
           wordBookItemId: currentQuestion.wordBookItemId,
           wordId: currentQuestion.wordId,
           isCorrect,
-          selectedAnswer: state.currentSelected,
+          selectedAnswer: answerToSubmit,
           correctAnswer: currentQuestion.correctAnswer,
           timeSpent,
         });
@@ -141,24 +142,7 @@ export function useWordPractice() {
     }
   }, [state.currentSelected, state.showResult, state.questions, state.currentIndex, state.sessionId, state.answers, state.questionStartTime]);
 
-  // 下一题
-  const nextQuestion = useCallback(() => {
-    if (state.currentIndex >= state.questions.length - 1) {
-      // 完成练习
-      completePractice();
-      return;
-    }
-
-    setState(prev => ({
-      ...prev,
-      currentIndex: prev.currentIndex + 1,
-      currentSelected: undefined,
-      showResult: false,
-      questionStartTime: Date.now(),
-    }));
-  }, [state.currentIndex, state.questions.length]);
-
-  // 完成练习
+  // 完成练习（定义在 nextQuestion 之前）
   const completePractice = useCallback(async () => {
     if (!state.sessionId) return;
 
@@ -180,6 +164,23 @@ export function useWordPractice() {
       isComplete: true,
     }));
   }, [state.sessionId, state.answers]);
+
+  // 下一题
+  const nextQuestion = useCallback(() => {
+    if (state.currentIndex >= state.questions.length - 1) {
+      // 完成练习
+      completePractice();
+      return;
+    }
+
+    setState(prev => ({
+      ...prev,
+      currentIndex: prev.currentIndex + 1,
+      currentSelected: undefined,
+      showResult: false,
+      questionStartTime: Date.now(),
+    }));
+  }, [state.currentIndex, state.questions.length, completePractice]);
 
   // 重置练习
   const resetPractice = useCallback(() => {

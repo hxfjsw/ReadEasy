@@ -70,24 +70,27 @@ export function registerPracticeHandlers(
       // 生成题目
       const questions: PracticeQuestion[] = await Promise.all(
         words.map(async (word) => {
+          // 提取简洁的中文释义（处理JSON格式）
+          const correctDefinition = extractSimpleDefinition(word.definitionCn);
+
           // 生成干扰项
           const distractors = await generateDistractors(
             word.word,
-            word.definitionCn,
+            correctDefinition,
             word.context || '',
             words,
             3
           );
 
           // 构建选项
-          const allOptions = [word.definitionCn, ...distractors];
+          const allOptions = [correctDefinition, ...distractors];
           // 打乱顺序
           const shuffledOptions = shuffleArray(allOptions);
           
           const options: PracticeOption[] = shuffledOptions.map((text, idx) => ({
             key: String(idx + 1),
             text,
-            isCorrect: text === word.definitionCn,
+            isCorrect: text === correctDefinition,
           }));
 
           // 找到正确答案的key
@@ -261,11 +264,11 @@ async function generateDistractors(
 ): Promise<string[]> {
   const distractors: string[] = [];
   
-  // 从其他单词中找释义
+  // 从其他单词中找释义（提取简洁释义后比较）
   const otherWords = allWords.filter((w: any) => 
     w.word !== correctWord && 
     w.definitionCn &&
-    w.definitionCn !== correctDefinition
+    extractSimpleDefinition(w.definitionCn) !== correctDefinition
   );
 
   // 打乱并选取
@@ -273,8 +276,9 @@ async function generateDistractors(
   
   for (const word of shuffled) {
     if (distractors.length >= count) break;
-    if (!distractors.includes(word.definitionCn)) {
-      distractors.push(word.definitionCn);
+    const simpleDef = extractSimpleDefinition(word.definitionCn);
+    if (!distractors.includes(simpleDef)) {
+      distractors.push(simpleDef);
     }
   }
 
@@ -300,4 +304,46 @@ function shuffleArray<T>(array: T[]): T[] {
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result;
+}
+
+// 提取简洁的中文释义
+// 处理两种情况：
+// 1. JSON格式的词典数据: [{"pos":"...","meaningCn":"..."}]
+// 2. 纯文本释义
+function extractSimpleDefinition(definition: string | undefined): string {
+  if (!definition) return '暂无释义';
+  
+  // 尝试解析JSON格式
+  if (definition.trim().startsWith('[') || definition.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(definition);
+      const definitions = Array.isArray(parsed) ? parsed : [parsed];
+      
+      // 提取第一个释义的中文部分
+      for (const def of definitions) {
+        if (def.meaningCn) {
+          const meaning = def.meaningCn;
+          // 尝试匹配连续的中文（长度2-15个字符）
+          const chineseMatches = meaning.match(/[\u4e00-\u9fa5]{2,15}/g);
+          if (chineseMatches && chineseMatches.length > 0) {
+            // 返回第一个匹配的中文词组
+            return chineseMatches[0];
+          }
+          // 如果没有匹配到中文词组，尝试提取中文开头的短语
+          const chineseStart = meaning.match(/^[\u4e00-\u9fa5][^\n;,.。，；]{1,10}/);
+          if (chineseStart) {
+            return chineseStart[0];
+          }
+          //  fallback: 返回前15个字符
+          return meaning.trim().slice(0, 15) || '暂无释义';
+        }
+      }
+    } catch (e) {
+      // JSON解析失败，当作纯文本处理
+    }
+  }
+  
+  // 纯文本处理：截取前15个字符
+  const simplified = definition.trim().slice(0, 15);
+  return simplified || '暂无释义';
 }
