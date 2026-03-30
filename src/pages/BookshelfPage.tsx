@@ -70,6 +70,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   interface ExtractedWord {
     word: string;
     count: number;
+    example?: string; // 存储单词在文中的例句
   }
   const [extractedWords, setExtractedWords] = useState<ExtractedWord[]>([]);
   const [originalExtractedWords, setOriginalExtractedWords] = useState<ExtractedWord[]>([]); // 保存原始顺序
@@ -301,12 +302,12 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
       // 读取文件内容
       const fileResult = await window.electron.ipcRenderer.invoke('file:read', book.filePath);
       if (fileResult.success) {
-        // 提取所有英文单词并统计次数
+        // 提取所有英文单词、次数和例句
         const content = fileResult.data || '';
-        const wordCounts = extractWordsFromText(content);
+        const wordData = extractWordsFromText(content);
         // 转换为数组格式
-        const allWords: ExtractedWord[] = Array.from(wordCounts.entries())
-          .map(([word, count]) => ({ word, count }));
+        const allWords: ExtractedWord[] = Array.from(wordData.entries())
+          .map(([word, data]) => ({ word, count: data.count, example: data.example }));
         // 计算排除的熟词数量
         const filteredCount = allWords.filter(item => masteredSet.has(item.word)).length;
         setExcludedCount(filteredCount);
@@ -350,24 +351,45 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     }
   }, [extractSortOrder, originalExtractedWords]);
 
-  // 从文本中提取单词
-  const extractWordsFromText = (text: string): Map<string, number> => {
-    const wordCounts = new Map<string, number>();
+    // 从文本中提取单词和例句
+  const extractWordsFromText = (text: string): Map<string, { count: number; example?: string }> => {
+    const wordData = new Map<string, { count: number; example?: string }>();
+    
+    // 先将文本分割成句子
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    
     // 匹配纯英文单词（4个字母以上，避免过于简单的词）
     const matches = text.match(/[a-zA-Z]{4,}/g);
     if (matches) {
       matches.forEach(word => {
         const lowerWord = word.toLowerCase();
         // 过滤纯重复字母和常见无意义组合
-        if (!/^(.)\1+$/.test(lowerWord) && lowerWord.length >= 4 && lowerWord.length <= 20) {
+        if (!/^(.)+$/.test(lowerWord) && lowerWord.length >= 4 && lowerWord.length <= 20) {
           // 使用 lemmatizer 还原单词原型
           const lemma = lemmatizeWord(lowerWord);
-          // 统计出现次数
-          wordCounts.set(lemma, (wordCounts.get(lemma) || 0) + 1);
+          
+          const existing = wordData.get(lemma);
+          if (existing) {
+            existing.count++;
+          } else {
+            // 找到包含该单词的例句
+            let example: string | undefined;
+            for (const sentence of sentences) {
+              if (sentence.toLowerCase().includes(lowerWord)) {
+                // 清理并截取例句（最多120字符）
+                example = sentence.trim().replace(/\s+/g, ' ');
+                if (example.length > 120) {
+                  example = example.slice(0, 120) + '...';
+                }
+                break;
+              }
+            }
+            wordData.set(lemma, { count: 1, example });
+          }
         }
       });
     }
-    return wordCounts;
+    return wordData;
   };
 
   // 添加选中的单词到熟词本
@@ -694,42 +716,48 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                 renderItem={(item) => {
                   const isSelected = selectedWords.includes(item.word);
                   return (
-                    <List.Item
-                      className={`cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
-                      onClick={() => {
-                        if (isSelected) {
-                          setSelectedWords(selectedWords.filter(w => w !== item.word));
-                        } else {
-                          setSelectedWords([...selectedWords, item.word]);
-                        }
-                      }}
-                      actions={[
-                        <Button
-                          key="view"
-                          type="text"
-                          size="small"
-                          icon={<EyeOutlined />}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewWord(item.word);
-                          }}
-                        >
-                          查看
-                        </Button>,
-                      ]}
+                    <Tooltip 
+                      title={item.example ? `"${item.example}"` : '无例句'}
+                      placement="topLeft"
+                      mouseEnterDelay={0.5}
                     >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => {}}
-                          className="w-4 h-4"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <span className="flex-1">{item.word}</span>
-                        <span className="text-gray-400 text-sm">出现 {item.count} 次</span>
-                      </div>
-                    </List.Item>
+                      <List.Item
+                        className={`cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedWords(selectedWords.filter(w => w !== item.word));
+                          } else {
+                            setSelectedWords([...selectedWords, item.word]);
+                          }
+                        }}
+                        actions={[
+                          <Button
+                            key="view"
+                            type="text"
+                            size="small"
+                            icon={<EyeOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewWord(item.word);
+                            }}
+                          >
+                            查看
+                          </Button>,
+                        ]}
+                      >
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span className="flex-1">{item.word}</span>
+                          <span className="text-gray-400 text-sm">出现 {item.count} 次</span>
+                        </div>
+                      </List.Item>
+                    </Tooltip>
                   );
                 }}
                 pagination={{
