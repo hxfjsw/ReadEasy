@@ -114,8 +114,8 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     }
   }, [whisper]);
 
-  // 翻译字幕
-  const translateSubtitle = useCallback(async (text: string) => {
+  // 翻译字幕 - 使用 ref 存储函数避免闭包问题
+  const translateSubtitleRef = useRef(async (text: string) => {
     if (!text?.trim() || text.length < 2) {
       setSubtitleTranslation('');
       return;
@@ -125,8 +125,9 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     
     try {
       console.log('[SubtitleTranslate] 开始翻译:', text.substring(0, 50) + '...');
+      const source = subtitleTranslateSource;
       const result = await window.electron.ipcRenderer.invoke(
-        subtitleTranslateSource === 'ai' ? 'ai:translate' : 'translate:sentence',
+        source === 'ai' ? 'ai:translate' : 'translate:sentence',
         { text: text.trim(), targetLang: 'zh-CN' }
       );
       
@@ -153,6 +154,48 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     } finally {
       setIsTranslatingSubtitle(false);
     }
+  });
+  
+  // 同步 ref
+  useEffect(() => {
+    translateSubtitleRef.current = async (text: string) => {
+      if (!text?.trim() || text.length < 2) {
+        setSubtitleTranslation('');
+        return;
+      }
+      
+      setIsTranslatingSubtitle(true);
+      
+      try {
+        console.log('[SubtitleTranslate] 开始翻译:', text.substring(0, 50) + '...');
+        const source = subtitleTranslateSource;
+        const result = await window.electron.ipcRenderer.invoke(
+          source === 'ai' ? 'ai:translate' : 'translate:sentence',
+          { text: text.trim(), targetLang: 'zh-CN' }
+        );
+        
+        console.log('[SubtitleTranslate] 翻译结果:', result);
+        
+        if (result.success) {
+          let translation = '';
+          if (typeof result.data === 'string') {
+            translation = result.data;
+          } else if (result.data?.translatedText) {
+            translation = result.data.translatedText;
+          }
+          console.log('[SubtitleTranslate] 翻译文本:', translation);
+          setSubtitleTranslation(translation);
+        } else {
+          console.error('[SubtitleTranslate] 翻译失败:', result.message);
+          setSubtitleTranslation('翻译失败: ' + (result.message || '未知错误'));
+        }
+      } catch (error) {
+        console.error('字幕翻译失败:', error);
+        setSubtitleTranslation('翻译失败: ' + (error as Error).message);
+      } finally {
+        setIsTranslatingSubtitle(false);
+      }
+    };
   }, [subtitleTranslateSource]);
 
   // 处理字幕匹配和高亮
@@ -208,7 +251,7 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
                   currentSubtitleRef.current = subtitle;
                   setCurrentSubtitle(subtitle);
                   // 自动翻译字幕
-                  translateSubtitle(subtitle.text);
+                  translateSubtitleRef.current(subtitle.text);
                   // 只在启用高亮时才高亮句子
                   if (enableHighlight) {
                     handleSubtitleMatch(subtitle);
@@ -222,7 +265,7 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
                 currentSubtitleRef.current = subtitle;
                 setCurrentSubtitle(subtitle);
                 // 自动翻译字幕
-                translateSubtitle(subtitle.text);
+                translateSubtitleRef.current(subtitle.text);
                 // 只在启用高亮时才高亮句子
                 if (enableHighlight) {
                   handleSubtitleMatch(subtitle);
@@ -236,7 +279,7 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
         message.error('音频播放失败');
       });
     }
-  }, [isPlayingAudio, whisper, subtitles, enableLazyMode, enableHighlight, translateSubtitle]);
+  }, [isPlayingAudio, whisper, subtitles, enableLazyMode, enableHighlight]);
 
   // 暂停音频（用于查词或翻译时）
   const pauseAudioForInteraction = useCallback(() => {
