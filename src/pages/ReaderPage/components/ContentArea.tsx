@@ -23,6 +23,7 @@ interface ContentAreaProps {
   similarityThreshold: number;
   currentWord?: CurrentWord | null; // TTS 当前朗读的单词
   currentTTSSentenceIndex?: number; // 当前 TTS 朗读的句子索引
+  ttsSentences?: string[]; // TTS 使用的句子数组（用于索引对齐）
   onMouseUp: () => void;
   onFileSelect: () => void;
   goToPreviousPage: () => void;
@@ -47,6 +48,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
   similarityThreshold,
   currentWord,
   currentTTSSentenceIndex = -1,
+  ttsSentences,
   onMouseUp,
   onFileSelect,
   goToPreviousPage,
@@ -100,6 +102,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
                 similarityThreshold={similarityThreshold}
                 currentWord={currentWord}
                 currentTTSSentenceIndex={currentTTSSentenceIndex}
+                ttsSentences={ttsSentences}
                 onWordClick={onWordClick}
               />
             </div>
@@ -134,6 +137,7 @@ interface RenderContentProps {
   similarityThreshold: number;
   currentWord?: CurrentWord | null;
   currentTTSSentenceIndex?: number;
+  ttsSentences?: string[]; // TTS 使用的句子数组
   onWordClick: (word: string, context: string) => void;
 }
 
@@ -175,8 +179,39 @@ const RenderContent: React.FC<RenderContentProps> = React.memo(({
   similarityThreshold,
   currentWord,
   currentTTSSentenceIndex = -1,
+  ttsSentences,
   onWordClick 
 }) => {
+  // 如果有 TTS 句子数组，直接使用它们来渲染（保证索引对齐）
+  if (ttsSentences && ttsSentences.length > 0) {
+    return (
+      <>
+        {ttsSentences.map((sentence, idx) => {
+          const shouldHighlight = highlightedSentence !== null && 
+            checkShouldHighlight(sentence, highlightedSentence.text, similarityThreshold);
+          
+          return (
+            <span key={`tts-sent-${idx}`}>
+              <SentenceSpan 
+                sentence={sentence}
+                sentenceIndex={idx}
+                vocabularyLevel={vocabularyLevel}
+                knownWords={knownWords}
+                vocabularyAnalysis={vocabularyAnalysis}
+                onWordClick={onWordClick}
+                isHighlighted={shouldHighlight}
+                currentWord={currentWord}
+                currentTTSSentenceIndex={currentTTSSentenceIndex}
+              />
+              {' '}
+            </span>
+          );
+        })}
+      </>
+    );
+  }
+  
+  // 没有 TTS 句子时，使用原来的渲染逻辑
   // 将文本分割成段落/句子
   const sentences = text.split(/([.!?。！？]+\s*)/).filter(s => s.length > 0);
   

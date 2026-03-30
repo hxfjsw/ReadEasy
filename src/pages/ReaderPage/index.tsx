@@ -162,6 +162,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
           similarityThreshold={settings.similarityThreshold}
           currentWord={tts.currentWord}
           currentTTSSentenceIndex={tts.currentSentenceIndex}
+          ttsSentences={tts.isReadingAloud ? tts.sentences : undefined}
           theme={settings.theme}
           onMouseUp={handleMouseUp}
           onFileSelect={file.handleFileSelect}
