@@ -95,6 +95,9 @@ export interface IPCChannels {
   'ecdict:batchLookup': (words: string[]) => Promise<{ success: boolean; data?: Record<string, any>; message?: string }>;
   'ecdict:search': (query: string, limit?: number) => Promise<{ success: boolean; data?: any[]; message?: string }>;
   'ecdict:stats': () => Promise<{ success: boolean; data?: { totalWords: number } | null; message?: string }>;
+  
+  // 单词提取服务
+  'word:extract': (filePath: string) => Promise<{ success: boolean; data?: { words: any[]; totalCount: number; masteredCount: number; ignoredCount: number }; message?: string }>;
 }
 
 // 暴露API到渲染进程

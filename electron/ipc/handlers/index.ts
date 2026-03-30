@@ -7,6 +7,7 @@ import { ParserService } from '../../services/parser';
 import { GoogleTranslationService } from '../../services/translation';
 import { YoudaoDictionaryService } from '../../services/youdao-dict';
 import { ecdictService } from '../../services/ecdict';
+import { WordExtractionService } from '../../services/word-extraction';
 import { registerPracticeHandlers } from './practice';
 
 export function registerIPCHandlers(
@@ -687,6 +688,25 @@ export function registerIPCHandlers(
       return { success: true, data: stats };
     } catch (error: any) {
       console.error('[IPC] ecdict:stats error:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
+  // ========== 单词提取服务 ==========
+  const wordExtractionService = new WordExtractionService(
+    dbService,
+    parserService,
+    ecdictService
+  );
+
+  // 从书籍中提取单词（完整的后端处理）
+  ipcMain.handle('word:extract', async (_, filePath: string) => {
+    console.log('[IPC] word:extract called:', filePath);
+    try {
+      const result = await wordExtractionService.extractWords(filePath);
+      return { success: true, data: result };
+    } catch (error: any) {
+      console.error('[IPC] word:extract error:', error);
       return { success: false, message: error.message };
     }
   });
