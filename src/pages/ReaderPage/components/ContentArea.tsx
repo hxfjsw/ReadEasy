@@ -91,7 +91,7 @@ export const ContentArea: React.FC<ContentAreaProps> = ({
     <div className="flex-1 flex overflow-hidden">
       <div ref={contentRef} className={`flex-1 overflow-hidden ${themeStyles.bg} relative`} onMouseUp={onMouseUp}>
         <div className="flex flex-col h-full">
-          <div className={`flex-1 reader-content p-8 max-w-4xl mx-auto ${themeStyles.container} shadow-sm overflow-auto`} style={{ fontSize: `${fontSize}px`, lineHeight }}>
+          <div className={`flex-1 reader-content p-8 mx-auto ${themeStyles.container} shadow-sm overflow-auto`} style={{ fontSize: `${fontSize}px`, lineHeight }}>
             <div className={`${themeStyles.text} whitespace-pre-wrap`}>
               <RenderContent 
                 text={fileContent}
