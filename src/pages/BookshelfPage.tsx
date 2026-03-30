@@ -11,7 +11,8 @@ import {
   Modal,
   List,
   Space,
-  Select
+  Select,
+  Table
 } from 'antd';
 import { 
   DeleteOutlined, 
@@ -21,8 +22,7 @@ import {
   PlusOutlined,
   FileUnknownOutlined,
   BookOutlined,
-  CheckCircleOutlined,
-  EyeOutlined
+  CheckCircleOutlined
 } from '@ant-design/icons';
 import type { ReadingRecord } from '../types';
 import WordPopup from '../components/WordPopup';
@@ -71,6 +71,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     word: string;
     count: number;
     example?: string; // 存储单词在文中的例句
+    definitionCn?: string; // 中文释义
   }
   const [extractedWords, setExtractedWords] = useState<ExtractedWord[]>([]);
   const [originalExtractedWords, setOriginalExtractedWords] = useState<ExtractedWord[]>([]); // 保存原始顺序
@@ -78,6 +79,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   const [excludedCount, setExcludedCount] = useState(0);
   const [extractPageSize, setExtractPageSize] = useState(50);
   const [extractSortOrder, setExtractSortOrder] = useState<'original' | 'alphabetical' | 'frequency'>('original');
+  const [loadingDefinitions, setLoadingDefinitions] = useState(false);
   
   // 单词查询弹窗状态
   const [wordPopupVisible, setWordPopupVisible] = useState(false);
@@ -287,6 +289,63 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     setDetailModalOpen(true);
   };
 
+  // 批量查询单词释义
+  const batchLoadDefinitions = async (words: ExtractedWord[]) => {
+    setLoadingDefinitions(true);
+    try {
+      // 分批查询，每批 10 个单词，避免过多并发
+      const batchSize = 10;
+      const updatedWords = [...words];
+      
+      for (let i = 0; i < words.length; i += batchSize) {
+        const batch = words.slice(i, i + batchSize);
+        const promises = batch.map(async (item) => {
+          try {
+            // 先尝试从数据库查询
+            const wordFromDB = await window.electron.ipcRenderer.invoke('db:getWord', item.word.toLowerCase());
+            if (wordFromDB?.definitionCn) {
+              return { ...item, definitionCn: wordFromDB.definitionCn };
+            }
+            // 数据库没有，尝试用基础查询接口
+            const result = await window.electron.ipcRenderer.invoke('ai:defineWordBasic', { word: item.word });
+            if (result?.success && result.data?.definitions?.[0]?.meaningCn) {
+              return { ...item, definitionCn: result.data.definitions[0].meaningCn };
+            }
+            return item;
+          } catch {
+            return item;
+          }
+        });
+        
+        const results = await Promise.all(promises);
+        // 更新已查询的单词释义
+        for (let j = 0; j < results.length; j++) {
+          const index = i + j;
+          if (index < updatedWords.length) {
+            updatedWords[index] = results[j];
+          }
+        }
+        
+        // 每完成一批就更新界面，让用户看到进度
+        setExtractedWords([...updatedWords]);
+        setOriginalExtractedWords(prev => {
+          const newOriginal = [...prev];
+          for (let j = 0; j < results.length; j++) {
+            const index = i + j;
+            if (index < newOriginal.length) {
+              newOriginal[index] = results[j];
+            }
+          }
+          return newOriginal;
+        });
+      }
+    } catch (error) {
+      console.error('批量加载释义失败:', error);
+    } finally {
+      setLoadingDefinitions(false);
+    }
+  };
+
   // 打开单词提取对话框
   const openExtractWordsModal = async (book: BookshelfItem) => {
     setSelectedBook(book);
@@ -307,7 +366,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         const wordData = extractWordsFromText(content);
         // 转换为数组格式
         const allWords: ExtractedWord[] = Array.from(wordData.entries())
-          .map(([word, data]) => ({ word, count: data.count, example: data.example }));
+          .map(([word, data]) => ({ word, count: data.count, example: data.example, definitionCn: undefined }));
         // 计算排除的熟词数量
         const filteredCount = allWords.filter(item => masteredSet.has(item.word)).length;
         setExcludedCount(filteredCount);
@@ -323,6 +382,13 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
           filteredWords = filteredWords.sort((a, b) => b.count - a.count);
         }
         setExtractedWords(filteredWords);
+        
+        // 自动加载释义（前 50 个单词）
+        if (filteredWords.length > 0) {
+          setTimeout(() => {
+            batchLoadDefinitions(filteredWords.slice(0, 50));
+          }, 100);
+        }
       } else {
         message.error('读取文件失败');
         setExtractedWords([]);
@@ -645,7 +711,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
           setExtractModalOpen(false);
           setSelectedWords([]);
         }}
-        width={700}
+        width={900}
         footer={[
           <Button 
             key="cancel" 
@@ -655,6 +721,14 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
             }}
           >
             取消
+          </Button>,
+          <Button
+            key="load-definitions"
+            loading={loadingDefinitions}
+            disabled={loadingDefinitions || extractedWords.length === 0}
+            onClick={() => batchLoadDefinitions(extractedWords)}
+          >
+            加载全部释义
           </Button>,
           <Button 
             key="add" 
@@ -710,61 +784,59 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
           ) : extractedWords.length === 0 ? (
             <Empty description="未提取到单词" />
           ) : (
-            <div className="max-h-[400px] overflow-y-auto border rounded-lg p-4">
-              <List
+            <div className="max-h-[500px] overflow-y-auto border rounded-lg">
+              <Table
                 dataSource={extractedWords}
-                renderItem={(item) => {
-                  const isSelected = selectedWords.includes(item.word);
-                  return (
-                    <Tooltip 
-                      title={item.example ? `"${item.example}"` : '无例句'}
-                      placement="topLeft"
-                      mouseEnterDelay={0.5}
-                    >
-                      <List.Item
-                        className={`cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedWords(selectedWords.filter(w => w !== item.word));
-                          } else {
-                            setSelectedWords([...selectedWords, item.word]);
-                          }
-                        }}
-                        actions={[
-                          <Button
-                            key="view"
-                            type="text"
-                            size="small"
-                            icon={<EyeOutlined />}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewWord(item.word);
-                            }}
-                          >
-                            查看
-                          </Button>,
-                        ]}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            className="w-4 h-4"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <span className="flex-1">{item.word}</span>
-                          <span className="text-gray-400 text-sm">出现 {item.count} 次</span>
-                        </div>
-                      </List.Item>
-                    </Tooltip>
-                  );
-                }}
+                rowKey="word"
+                size="small"
                 pagination={{
                   pageSize: extractPageSize,
                   showSizeChanger: false,
                   showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
                 }}
+                rowSelection={{
+                  type: 'checkbox',
+                  selectedRowKeys: selectedWords,
+                  onChange: (selectedRowKeys) => {
+                    setSelectedWords(selectedRowKeys as string[]);
+                  },
+                }}
+                columns={[
+                  {
+                    title: '单词',
+                    dataIndex: 'word',
+                    key: 'word',
+                    width: 150,
+                    render: (word: string, record: ExtractedWord) => (
+                      <Tooltip title={record.example ? `"${record.example}"` : '无例句'} placement="topLeft" mouseEnterDelay={0.5}>
+                        <span className="font-medium text-blue-600 cursor-pointer hover:underline" onClick={() => handleViewWord(word)}>
+                          {word}
+                        </span>
+                      </Tooltip>
+                    ),
+                  },
+                  {
+                    title: '中文释义',
+                    dataIndex: 'definitionCn',
+                    key: 'definitionCn',
+                    ellipsis: true,
+                    render: (definitionCn: string | undefined) => (
+                      <span className="text-gray-600 text-sm">
+                        {definitionCn || '-'}
+                      </span>
+                    ),
+                  },
+                  {
+                    title: '出现次数',
+                    dataIndex: 'count',
+                    key: 'count',
+                    width: 100,
+                    sorter: (a: ExtractedWord, b: ExtractedWord) => a.count - b.count,
+                    render: (count: number) => (
+                      <Tag color="blue">{count} 次</Tag>
+                    ),
+                  },
+                ]}
               />
             </div>
           )}
