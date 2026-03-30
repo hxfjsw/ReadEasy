@@ -28,6 +28,11 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
   const [enableHighlight, setEnableHighlight] = useState(false);
   // 当前播放的字幕（用于显示）
   const [currentSubtitle, setCurrentSubtitle] = useState<SubtitleItem | null>(null);
+  // 当前字幕的翻译
+  const [subtitleTranslation, setSubtitleTranslation] = useState<string>('');
+  const [isTranslatingSubtitle, setIsTranslatingSubtitle] = useState(false);
+  // 翻译源（默认使用 Google 翻译）
+  const [subtitleTranslateSource, setSubtitleTranslateSource] = useState<'google' | 'ai'>('google');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastTranscribedSegmentRef = useRef<number>(-1);
@@ -109,6 +114,59 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     }
   }, [whisper]);
 
+  // 翻译字幕
+  const translateSubtitle = useCallback(async (text: string) => {
+    if (!text?.trim() || text.length < 2) {
+      setSubtitleTranslation('');
+      return;
+    }
+    
+    // 如果正在翻译中，跳过
+    if (isTranslatingSubtitle) return;
+    
+    setIsTranslatingSubtitle(true);
+    
+    try {
+      const result = await window.electron.ipcRenderer.invoke(
+        subtitleTranslateSource === 'ai' ? 'ai:translate' : 'translate:sentence',
+        { text: text.trim(), targetLang: 'zh-CN' }
+      );
+      
+      if (result.success) {
+        setSubtitleTranslation(result.data?.translatedText || result.data || '');
+      } else {
+        setSubtitleTranslation('翻译失败');
+      }
+    } catch (error) {
+      console.error('字幕翻译失败:', error);
+      setSubtitleTranslation('翻译失败');
+    } finally {
+      setIsTranslatingSubtitle(false);
+    }
+  }, [subtitleTranslateSource]);
+
+  // 处理字幕匹配和高亮
+  const handleSubtitleMatch = useCallback((subtitle: SubtitleItem) => {
+    if (!contentTextRef.current || !subtitle.text) return;
+    
+    console.log(`[Audio] 当前字幕: ${subtitle.text}`);
+    
+    // 查找匹配的句子
+    const match = whisper.findMatchingSentence(subtitle.text, contentTextRef.current, similarityThreshold);
+    
+    if (match) {
+      console.log(`[Audio] 高亮句子 (相似度 ${(match.similarity * 100).toFixed(1)}%):`, match.sentence);
+      setHighlightedSentence({
+        text: match.sentence,
+        similarity: match.similarity,
+        startTime: subtitle.startTime,
+        endTime: subtitle.endTime,
+      });
+    } else {
+      console.log('[Audio] 未找到匹配的句子，字幕文本:', subtitle.text);
+    }
+  }, [whisper, similarityThreshold]);
+
   // 播放/暂停音频
   const toggleAudioPlayback = useCallback(() => {
     if (!audioRef.current) {
@@ -139,6 +197,8 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
                 if (subtitle && subtitle.text && subtitle.index !== currentSubtitleRef.current?.index) {
                   currentSubtitleRef.current = subtitle;
                   setCurrentSubtitle(subtitle);
+                  // 自动翻译字幕
+                  translateSubtitle(subtitle.text);
                   // 只在启用高亮时才高亮句子
                   if (enableHighlight) {
                     handleSubtitleMatch(subtitle);
@@ -151,6 +211,8 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
               if (subtitle && subtitle.text && subtitle.index !== currentSubtitleRef.current?.index) {
                 currentSubtitleRef.current = subtitle;
                 setCurrentSubtitle(subtitle);
+                // 自动翻译字幕
+                translateSubtitle(subtitle.text);
                 // 只在启用高亮时才高亮句子
                 if (enableHighlight) {
                   handleSubtitleMatch(subtitle);
@@ -164,29 +226,7 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
         message.error('音频播放失败');
       });
     }
-  }, [isPlayingAudio, whisper, subtitles, enableLazyMode, enableHighlight]);
-
-  // 处理字幕匹配和高亮
-  const handleSubtitleMatch = useCallback((subtitle: SubtitleItem) => {
-    if (!contentTextRef.current || !subtitle.text) return;
-    
-    console.log(`[Audio] 当前字幕: ${subtitle.text}`);
-    
-    // 查找匹配的句子
-    const match = whisper.findMatchingSentence(subtitle.text, contentTextRef.current, similarityThreshold);
-    
-    if (match) {
-      console.log(`[Audio] 高亮句子 (相似度 ${(match.similarity * 100).toFixed(1)}%):`, match.sentence);
-      setHighlightedSentence({
-        text: match.sentence,
-        similarity: match.similarity,
-        startTime: subtitle.startTime,
-        endTime: subtitle.endTime,
-      });
-    } else {
-      console.log('[Audio] 未找到匹配的句子，字幕文本:', subtitle.text);
-    }
-  }, [whisper, similarityThreshold]);
+  }, [isPlayingAudio, whisper, subtitles, enableLazyMode, enableHighlight, translateSubtitle]);
 
   // 暂停音频（用于查词或翻译时）
   const pauseAudioForInteraction = useCallback(() => {
@@ -328,5 +368,10 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     setEnableHighlight,
     // 当前播放的字幕
     currentSubtitle,
+    // 字幕翻译
+    subtitleTranslation,
+    isTranslatingSubtitle,
+    subtitleTranslateSource,
+    setSubtitleTranslateSource,
   };
 }

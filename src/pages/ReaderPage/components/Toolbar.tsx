@@ -46,6 +46,11 @@ interface ToolbarProps {
   onToggleHighlight?: () => void;
   // 当前播放的字幕
   currentSubtitle?: { text: string; startTime: number; endTime: number } | null;
+  // 字幕翻译
+  subtitleTranslation?: string;
+  isTranslatingSubtitle?: boolean;
+  subtitleTranslateSource?: 'google' | 'ai';
+  onToggleSubtitleTranslateSource?: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -91,6 +96,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onToggleHighlight,
   // 当前播放的字幕
   currentSubtitle,
+  // 字幕翻译
+  subtitleTranslation = '',
+  isTranslatingSubtitle = false,
+  subtitleTranslateSource = 'google',
+  onToggleSubtitleTranslateSource,
 }) => {
   const bgClass = theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
   const subtitleBgClass = theme === 'dark' ? 'bg-gray-900 text-gray-200' : 'bg-gray-50 text-gray-800';
@@ -158,10 +168,29 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     
     {/* 字幕显示行 */}
     {audioFile && currentSubtitle?.text && (
-      <div className={`px-4 py-2 text-sm border-b ${subtitleBgClass}`}>
-        <span className="font-medium text-gray-500 mr-2">字幕:</span>
-        <span>{currentSubtitle.text}</span>
-      </div>
+      <>
+        <div className={`px-4 py-2 text-sm border-b ${subtitleBgClass}`}>
+          <span className="font-medium text-gray-500 mr-2">字幕:</span>
+          <span>{currentSubtitle.text}</span>
+        </div>
+        {/* 字幕翻译行 */}
+        <div className={`px-4 py-2 text-sm border-b ${subtitleBgClass} flex items-center justify-between`}>
+          <div className="flex-1">
+            <span className="font-medium text-gray-500 mr-2">翻译:</span>
+            <span className="text-blue-600">
+              {isTranslatingSubtitle ? '翻译中...' : (subtitleTranslation || '等待翻译...')}
+            </span>
+          </div>
+          <Button 
+            type="link" 
+            size="small" 
+            onClick={onToggleSubtitleTranslateSource}
+            className="text-xs"
+          >
+            {subtitleTranslateSource === 'google' ? '谷歌翻译' : 'AI 翻译'}
+          </Button>
+        </div>
+      </>
     )}
     </>
   );

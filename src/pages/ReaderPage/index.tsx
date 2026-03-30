@@ -151,6 +151,10 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         enableHighlight={audio.enableHighlight}
         onToggleHighlight={() => audio.setEnableHighlight(!audio.enableHighlight)}
         currentSubtitle={audio.currentSubtitle}
+        subtitleTranslation={audio.subtitleTranslation}
+        isTranslatingSubtitle={audio.isTranslatingSubtitle}
+        subtitleTranslateSource={audio.subtitleTranslateSource}
+        onToggleSubtitleTranslateSource={() => audio.setSubtitleTranslateSource(audio.subtitleTranslateSource === 'google' ? 'ai' : 'google')}
       />
 
       <div className="flex flex-1 overflow-auto">
