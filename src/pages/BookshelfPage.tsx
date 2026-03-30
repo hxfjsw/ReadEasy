@@ -67,12 +67,16 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   // 单词提取相关状态
   const [extractModalOpen, setExtractModalOpen] = useState(false);
   const [extractLoading, setExtractLoading] = useState(false);
-  const [extractedWords, setExtractedWords] = useState<string[]>([]);
-  const [originalExtractedWords, setOriginalExtractedWords] = useState<string[]>([]); // 保存原始顺序
+  interface ExtractedWord {
+    word: string;
+    count: number;
+  }
+  const [extractedWords, setExtractedWords] = useState<ExtractedWord[]>([]);
+  const [originalExtractedWords, setOriginalExtractedWords] = useState<ExtractedWord[]>([]); // 保存原始顺序
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [excludedCount, setExcludedCount] = useState(0);
   const [extractPageSize, setExtractPageSize] = useState(50);
-  const [extractSortOrder, setExtractSortOrder] = useState<'original' | 'alphabetical'>('original');
+  const [extractSortOrder, setExtractSortOrder] = useState<'original' | 'alphabetical' | 'frequency'>('original');
   
   // 单词查询弹窗状态
   const [wordPopupVisible, setWordPopupVisible] = useState(false);
@@ -297,24 +301,27 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
       // 读取文件内容
       const fileResult = await window.electron.ipcRenderer.invoke('file:read', book.filePath);
       if (fileResult.success) {
-        // 提取所有英文单词
+        // 提取所有英文单词并统计次数
         const content = fileResult.data || '';
-        const words = extractWordsFromText(content);
-        // 去重
-        const allUniqueWords = Array.from(new Set(words));
+        const wordCounts = extractWordsFromText(content);
+        // 转换为数组格式
+        const allWords: ExtractedWord[] = Array.from(wordCounts.entries())
+          .map(([word, count]) => ({ word, count }));
         // 计算排除的熟词数量
-        const filteredCount = allUniqueWords.filter(word => masteredSet.has(word)).length;
+        const filteredCount = allWords.filter(item => masteredSet.has(item.word)).length;
         setExcludedCount(filteredCount);
         // 过滤掉熟词本中的单词
-        let uniqueWords = allUniqueWords
-          .filter(word => !masteredSet.has(word));
-        // 保存原始顺序
-        setOriginalExtractedWords(uniqueWords);
-        // 根据排序方式决定是否按字母排序（默认保持原文顺序）
+        let filteredWords = allWords
+          .filter(item => !masteredSet.has(item.word));
+        // 保存原始顺序（按出现顺序）
+        setOriginalExtractedWords(filteredWords);
+        // 根据排序方式排序
         if (extractSortOrder === 'alphabetical') {
-          uniqueWords = uniqueWords.sort();
+          filteredWords = filteredWords.sort((a, b) => a.word.localeCompare(b.word));
+        } else if (extractSortOrder === 'frequency') {
+          filteredWords = filteredWords.sort((a, b) => b.count - a.count);
         }
-        setExtractedWords(uniqueWords);
+        setExtractedWords(filteredWords);
       } else {
         message.error('读取文件失败');
         setExtractedWords([]);
@@ -333,18 +340,19 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
   // 当排序方式改变时重新排序单词列表
   useEffect(() => {
     if (originalExtractedWords.length > 0) {
+      let sortedWords = [...originalExtractedWords];
       if (extractSortOrder === 'alphabetical') {
-        setExtractedWords([...originalExtractedWords].sort());
-      } else {
-        // 恢复原始顺序
-        setExtractedWords([...originalExtractedWords]);
+        sortedWords = sortedWords.sort((a, b) => a.word.localeCompare(b.word));
+      } else if (extractSortOrder === 'frequency') {
+        sortedWords = sortedWords.sort((a, b) => b.count - a.count);
       }
+      setExtractedWords(sortedWords);
     }
   }, [extractSortOrder, originalExtractedWords]);
 
   // 从文本中提取单词
-  const extractWordsFromText = (text: string): string[] => {
-    const words: string[] = [];
+  const extractWordsFromText = (text: string): Map<string, number> => {
+    const wordCounts = new Map<string, number>();
     // 匹配纯英文单词（4个字母以上，避免过于简单的词）
     const matches = text.match(/[a-zA-Z]{4,}/g);
     if (matches) {
@@ -354,11 +362,12 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         if (!/^(.)\1+$/.test(lowerWord) && lowerWord.length >= 4 && lowerWord.length <= 20) {
           // 使用 lemmatizer 还原单词原型
           const lemma = lemmatizeWord(lowerWord);
-          words.push(lemma);
+          // 统计出现次数
+          wordCounts.set(lemma, (wordCounts.get(lemma) || 0) + 1);
         }
       });
     }
-    return words;
+    return wordCounts;
   };
 
   // 添加选中的单词到熟词本
@@ -649,6 +658,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                 options={[
                   { value: 'original', label: '文中顺序' },
                   { value: 'alphabetical', label: '字母排序' },
+                  { value: 'frequency', label: '出现频率' },
                 ]}
                 style={{ width: 100 }}
               />
@@ -681,16 +691,16 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
             <div className="max-h-[400px] overflow-y-auto border rounded-lg p-4">
               <List
                 dataSource={extractedWords}
-                renderItem={(word) => {
-                  const isSelected = selectedWords.includes(word);
+                renderItem={(item) => {
+                  const isSelected = selectedWords.includes(item.word);
                   return (
                     <List.Item
                       className={`cursor-pointer hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
                       onClick={() => {
                         if (isSelected) {
-                          setSelectedWords(selectedWords.filter(w => w !== word));
+                          setSelectedWords(selectedWords.filter(w => w !== item.word));
                         } else {
-                          setSelectedWords([...selectedWords, word]);
+                          setSelectedWords([...selectedWords, item.word]);
                         }
                       }}
                       actions={[
@@ -701,7 +711,7 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                           icon={<EyeOutlined />}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleViewWord(word);
+                            handleViewWord(item.word);
                           }}
                         >
                           查看
@@ -716,7 +726,8 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
                           className="w-4 h-4"
                           onClick={(e) => e.stopPropagation()}
                         />
-                        <span>{word}</span>
+                        <span className="flex-1">{item.word}</span>
+                        <span className="text-gray-400 text-sm">出现 {item.count} 次</span>
                       </div>
                     </List.Item>
                   );
