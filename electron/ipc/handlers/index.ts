@@ -354,9 +354,49 @@ export function registerIPCHandlers(
   ipcMain.handle('ai:defineWord', async (_, params: { word: string; context?: string; configId?: number }) => {
     console.log('[IPC] ai:defineWord called:', params.word);
     
-    // 第一步：优先尝试有道词典 API
+    // 第一步：优先尝试 ECDICT（如果已配置）
+    if (ecdictService.isAvailable()) {
+      try {
+        console.log('[IPC] ai:defineWord trying ECDICT first...');
+        const ecdictResult = ecdictService.lookup(params.word);
+        if (ecdictResult) {
+          console.log('[IPC] ai:defineWord ECDICT success');
+          // 转换 ECDICT 格式为统一格式
+          const dictResult = {
+            word: ecdictResult.word,
+            phoneticUs: ecdictResult.phoneticUs,
+            phoneticUk: ecdictResult.phoneticUk,
+            definitions: ecdictResult.definitionCn ? [{
+              pos: ecdictResult.pos || '',
+              meaningCn: ecdictResult.definitionCn,
+              examples: [],
+            }] : [],
+            level: ecdictResult.level,
+          };
+          // 如果有上下文且已配置 AI，补充上下文分析
+          if (params.context) {
+            try {
+              const detailedResult = await aiService.getWordDefinitionDetailed(params.word, params.context, params.configId);
+              return { 
+                success: true, 
+                data: { ...dictResult, ...detailedResult },
+                source: 'ecdict+ai'
+              };
+            } catch (aiError) {
+              // AI 补充失败，返回基础词典结果
+              console.log('[IPC] AI context analysis failed, returning ECDICT result only');
+            }
+          }
+          return { success: true, data: dictResult, source: 'ecdict' };
+        }
+      } catch (ecdictError: any) {
+        console.log('[IPC] ECDICT lookup failed:', ecdictError.message);
+      }
+    }
+    
+    // 第二步：ECDICT 未配置或未找到，尝试有道词典 API
     try {
-      console.log('[IPC] ai:defineWord trying Youdao Dictionary API first...');
+      console.log('[IPC] ai:defineWord trying Youdao Dictionary API...');
       const dictResult = await youdaoDictionaryService.lookup(params.word);
       if (dictResult) {
         console.log('[IPC] ai:defineWord Youdao Dictionary API success');
@@ -380,7 +420,7 @@ export function registerIPCHandlers(
       console.log('[IPC] Youdao Dictionary API failed:', dictError.message);
     }
     
-    // 第二步：有道词典 API 未找到，尝试 AI
+    // 第三步：有道词典 API 未找到，尝试 AI
     console.log('[IPC] ai:defineWord falling back to AI...');
     try {
       const result = await aiService.getWordDefinition(params.word, params.context, params.configId);
@@ -406,9 +446,35 @@ export function registerIPCHandlers(
   ipcMain.handle('ai:defineWordBasic', async (_, params: { word: string; configId?: number }) => {
     console.log('[IPC] ai:defineWordBasic called:', params.word);
     
-    // 第一步：优先尝试有道词典 API（更快且免费）
+    // 第一步：优先尝试 ECDICT（如果已配置）
+    if (ecdictService.isAvailable()) {
+      try {
+        console.log('[IPC] ai:defineWordBasic trying ECDICT first...');
+        const ecdictResult = ecdictService.lookup(params.word);
+        if (ecdictResult) {
+          console.log('[IPC] ai:defineWordBasic ECDICT success');
+          // 转换 ECDICT 格式为统一格式
+          const dictResult = {
+            word: ecdictResult.word,
+            phoneticUs: ecdictResult.phoneticUs,
+            phoneticUk: ecdictResult.phoneticUk,
+            definitions: ecdictResult.definitionCn ? [{
+              pos: ecdictResult.pos || '',
+              meaningCn: ecdictResult.definitionCn,
+              examples: [],
+            }] : [],
+            level: ecdictResult.level,
+          };
+          return { success: true, data: dictResult, source: 'ecdict' };
+        }
+      } catch (ecdictError: any) {
+        console.log('[IPC] ECDICT lookup failed:', ecdictError.message);
+      }
+    }
+    
+    // 第二步：ECDICT 未配置或未找到，尝试有道词典 API
     try {
-      console.log('[IPC] ai:defineWordBasic trying Youdao Dictionary API first...');
+      console.log('[IPC] ai:defineWordBasic trying Youdao Dictionary API...');
       const dictResult = await youdaoDictionaryService.lookup(params.word);
       if (dictResult) {
         console.log('[IPC] ai:defineWordBasic Youdao Dictionary API success');
@@ -418,7 +484,7 @@ export function registerIPCHandlers(
       console.log('[IPC] Youdao Dictionary API failed:', dictError.message);
     }
     
-    // 第二步：有道词典 API 未找到，尝试 AI
+    // 第三步：有道词典 API 未找到，尝试 AI
     console.log('[IPC] ai:defineWordBasic falling back to AI...');
     try {
       const result = await aiService.getWordDefinitionBasic(params.word, params.configId);
