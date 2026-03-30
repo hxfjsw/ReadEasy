@@ -1,12 +1,23 @@
 import { useState, useEffect } from 'react';
-import { Button, List, Card, Empty, Input, message, Popconfirm, Tag, Upload, Pagination } from 'antd';
-import { DeleteOutlined, SearchOutlined, CheckCircleOutlined, PlusOutlined, DownloadOutlined, UploadOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Button, List, Card, Empty, Input, message, Popconfirm, Tag, Upload, Pagination, Spin, Tooltip } from 'antd';
+import { DeleteOutlined, SearchOutlined, CheckCircleOutlined, PlusOutlined, DownloadOutlined, UploadOutlined, ReloadOutlined, SoundOutlined } from '@ant-design/icons';
 
+
+interface WordDetail {
+  word: string;
+  phoneticUs?: string;
+  phoneticUk?: string;
+  definitionCn?: string;
+  tag?: string;
+  frq?: number;
+}
 
 const MasteredWordsPage: React.FC = () => {
   const [masteredWords, setMasteredWords] = useState<string[]>([]);
   const [filteredWords, setFilteredWords] = useState<string[]>([]);
+  const [wordDetails, setWordDetails] = useState<Map<string, WordDetail>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [newWord, setNewWord] = useState('');
   const [adding, setAdding] = useState(false);
@@ -14,6 +25,21 @@ const MasteredWordsPage: React.FC = () => {
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  
+  // Tag 标签映射
+  const tagLabels: Record<string, string> = {
+    'zk': '中考',
+    'gk': '高考',
+    'cet4': '四级',
+    'cet6': '六级',
+    'ky': '考研',
+    'ielts': '雅思',
+    'toefl': '托福',
+    'gre': 'GRE',
+    'tem8': '专八',
+    'oxford': '牛津3000',
+    'collins': '柯林斯',
+  };
 
 
   // 加载熟词本
@@ -23,12 +49,60 @@ const MasteredWordsPage: React.FC = () => {
       const words = await window.electron.ipcRenderer.invoke('db:getMasteredWords');
       setMasteredWords(words);
       setFilteredWords(words);
+      // 加载单词详情
+      await loadWordDetails(words);
     } catch (error) {
       console.error('加载熟词本失败:', error);
       message.error('加载熟词本失败');
     } finally {
       setLoading(false);
     }
+  };
+
+  // 批量加载单词详情（从 ECDICT）
+  const loadWordDetails = async (words: string[]) => {
+    if (words.length === 0) return;
+    setDetailsLoading(true);
+    try {
+      // 使用 ECDICT 批量查询
+      const result = await window.electron.ipcRenderer.invoke('ecdict:batchLookup', words);
+      if (result?.success && result.data) {
+        const details = new Map<string, WordDetail>();
+        Object.entries(result.data).forEach(([key, value]: [string, any]) => {
+          details.set(key, {
+            word: value.word,
+            phoneticUs: value.phoneticUs,
+            phoneticUk: value.phoneticUk,
+            definitionCn: value.definitionCn,
+            tag: value.tag,
+            frq: value.frq,
+          });
+        });
+        setWordDetails(details);
+      }
+    } catch (error) {
+      console.error('加载单词详情失败:', error);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  // 播放单词发音
+  const playPronunciation = (word: string) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.8;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      message.warning('您的浏览器不支持语音播放');
+    }
+  };
+
+  // 解析 tag 为标签数组
+  const parseTags = (tagString?: string): string[] => {
+    if (!tagString) return [];
+    return tagString.split(/\s+/).filter(t => t);
   };
 
   useEffect(() => {
@@ -274,37 +348,76 @@ const MasteredWordsPage: React.FC = () => {
         ) : (
           <>
             <div className="flex-1 overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-              <List
-                loading={loading}
-                dataSource={paginatedWords}
-                renderItem={(word) => (
-                  <List.Item
-                    actions={[
-                      <Popconfirm
-                        key="remove"
-                        title="确定移除？"
-                        description={`将 "${word}" 从熟词本移除，该单词将再次标记为生词。`}
-                        onConfirm={() => handleRemove(word)}
-                        okText="移除"
-                        cancelText="取消"
+              <Spin spinning={detailsLoading} tip="加载单词详情...">
+                <List
+                  loading={loading}
+                  dataSource={paginatedWords}
+                  renderItem={(word) => {
+                    const detail = wordDetails.get(word.toLowerCase());
+                    const tags = parseTags(detail?.tag);
+                    return (
+                      <List.Item
+                        actions={[
+                          <Tooltip title="朗读" key="sound">
+                            <Button
+                              type="text"
+                              icon={<SoundOutlined />}
+                              onClick={() => playPronunciation(word)}
+                            />
+                          </Tooltip>,
+                          <Popconfirm
+                            key="remove"
+                            title="确定移除？"
+                            description={`将 "${word}" 从熟词本移除，该单词将再次标记为生词。`}
+                            onConfirm={() => handleRemove(word)}
+                            okText="移除"
+                            cancelText="取消"
+                          >
+                            <Button 
+                              type="text" 
+                              danger 
+                              icon={<DeleteOutlined />}
+                            >
+                              移除
+                            </Button>
+                          </Popconfirm>,
+                        ]}
                       >
-                        <Button 
-                          type="text" 
-                          danger 
-                          icon={<DeleteOutlined />}
-                        >
-                          移除
-                        </Button>
-                      </Popconfirm>,
-                    ]}
-                  >
-                    <List.Item.Meta
-                      title={<span className="text-lg font-medium">{word}</span>}
-                    />
-                  </List.Item>
-                )}
-                pagination={false}
-              />
+                        <List.Item.Meta
+                          title={
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-lg font-medium">{word}</span>
+                              {detail?.phoneticUs && (
+                                <span className="text-gray-500 text-sm">/{detail.phoneticUs}/</span>
+                              )}
+                              {/* 词频标签 */}
+                              {detail?.frq && detail.frq > 0 && detail.frq <= 5000 && (
+                                <Tooltip title={`词频排名: ${detail.frq}`}>
+                                  <Tag color="blue" className="text-xs">Frq: {detail.frq}</Tag>
+                                </Tooltip>
+                              )}
+                              {/* 等级标签 */}
+                              {tags.map(tag => (
+                                <Tag key={tag} color="green" className="text-xs">
+                                  {tagLabels[tag] || tag}
+                                </Tag>
+                              ))}
+                            </div>
+                          }
+                          description={
+                            detail?.definitionCn ? (
+                              <span className="text-gray-600 text-sm line-clamp-1">
+                                {detail.definitionCn}
+                              </span>
+                            ) : null
+                          }
+                        />
+                      </List.Item>
+                    );
+                  }}
+                  pagination={false}
+                />
+              </Spin>
             </div>
             {/* 自定义分页 */}
             <div className="flex justify-center mt-4 pt-4 border-t border-gray-200">

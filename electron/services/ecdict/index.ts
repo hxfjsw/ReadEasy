@@ -28,6 +28,7 @@ export interface ECDICTDefinition {
   level?: string;
   exchange?: string;
   tag?: string;
+  frq?: number; // 当代语料库词频
 }
 
 export class ECDICTService {
@@ -197,6 +198,7 @@ export class ECDICTService {
       level,
       exchange: entry.exchange,
       tag: entry.tag,
+      frq: entry.frq,
     };
   }
 
