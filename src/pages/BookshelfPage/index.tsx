@@ -33,6 +33,8 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
     selectedWords,
     setSelectedWords,
     excludedCount,
+    excludedMasteredCount,
+    excludedIgnoredCount,
     extractPageSize,
     setExtractPageSize,
     extractSortOrder,
@@ -132,6 +134,8 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         selectedWords={selectedWords}
         onSelectedWordsChange={setSelectedWords}
         excludedCount={excludedCount}
+        excludedMasteredCount={excludedMasteredCount}
+        excludedIgnoredCount={excludedIgnoredCount}
         ignoredInvalidCount={ignoredInvalidCount}
         extractLoading={extractLoading}
         loadingDefinitions={loadingDefinitions}

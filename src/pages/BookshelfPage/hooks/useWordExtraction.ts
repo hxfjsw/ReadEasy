@@ -10,6 +10,8 @@ export const useWordExtraction = (selectedBook: BookshelfItem | null) => {
   const [originalExtractedWords, setOriginalExtractedWords] = useState<ExtractedWord[]>([]);
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [excludedCount, setExcludedCount] = useState(0);
+  const [excludedMasteredCount, setExcludedMasteredCount] = useState(0);
+  const [excludedIgnoredCount, setExcludedIgnoredCount] = useState(0);
   const [extractPageSize, setExtractPageSize] = useState(50);
   const [extractSortOrder, setExtractSortOrder] = useState<'original' | 'alphabetical' | 'frequency'>('original');
   const [loadingDefinitions, setLoadingDefinitions] = useState(false);
@@ -90,8 +92,14 @@ export const useWordExtraction = (selectedBook: BookshelfItem | null) => {
     setSelectedWords([]);
     
     try {
-      const masteredWords = await window.electron.ipcRenderer.invoke('db:getMasteredWords');
+      // 同时获取熟词本和废词本
+      const [masteredWords, ignoredWords] = await Promise.all([
+        window.electron.ipcRenderer.invoke('db:getMasteredWords'),
+        window.electron.ipcRenderer.invoke('db:getIgnoredWords'),
+      ]);
+      
       const masteredSet = new Set(masteredWords.map((w: string) => w.toLowerCase()));
+      const ignoredSet = new Set(ignoredWords.map((w: string) => w.toLowerCase()));
       
       const fileResult = await window.electron.ipcRenderer.invoke('file:read', book.filePath, { maxContentSize: 100 * 1024 * 1024 });
       if (fileResult.success) {
@@ -100,10 +108,17 @@ export const useWordExtraction = (selectedBook: BookshelfItem | null) => {
         const allWords: ExtractedWord[] = Array.from(wordData.entries())
           .map(([word, data]) => ({ word, count: data.count, example: data.example, definitionCn: undefined }));
         
-        const filteredCount = allWords.filter(item => masteredSet.has(item.word)).length;
-        setExcludedCount(filteredCount);
+        // 计算熟词本和废词本中排除的单词数量
+        const masteredCount = allWords.filter(item => masteredSet.has(item.word)).length;
+        const ignoredCount = allWords.filter(item => ignoredSet.has(item.word)).length;
+        setExcludedCount(masteredCount + ignoredCount);
+        setExcludedMasteredCount(masteredCount);
+        setExcludedIgnoredCount(ignoredCount);
         
-        let filteredWords = allWords.filter(item => !masteredSet.has(item.word));
+        // 过滤掉熟词本和废词本中的单词
+        let filteredWords = allWords.filter(item => 
+          !masteredSet.has(item.word) && !ignoredSet.has(item.word)
+        );
         setOriginalExtractedWords(filteredWords);
         
         if (extractSortOrder === 'alphabetical') {
@@ -220,6 +235,8 @@ export const useWordExtraction = (selectedBook: BookshelfItem | null) => {
     selectedWords,
     setSelectedWords,
     excludedCount,
+    excludedMasteredCount,
+    excludedIgnoredCount,
     extractPageSize,
     setExtractPageSize,
     extractSortOrder,

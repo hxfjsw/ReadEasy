@@ -9,6 +9,8 @@ interface WordExtractModalProps {
   selectedWords: string[];
   onSelectedWordsChange: (words: string[]) => void;
   excludedCount: number;
+  excludedMasteredCount: number;
+  excludedIgnoredCount: number;
   ignoredInvalidCount: number;
   extractLoading: boolean;
   loadingDefinitions: boolean;
@@ -31,6 +33,8 @@ export const WordExtractModal: React.FC<WordExtractModalProps> = ({
   selectedWords,
   onSelectedWordsChange,
   excludedCount,
+  excludedMasteredCount,
+  excludedIgnoredCount,
   ignoredInvalidCount,
   extractLoading,
   loadingDefinitions,
@@ -87,8 +91,12 @@ export const WordExtractModal: React.FC<WordExtractModalProps> = ({
         <div className="flex items-center justify-between">
           <span className="text-gray-600">
             共提取到 <strong>{extractedWords.length + excludedCount}</strong> 个单词
-            {excludedCount > 0 && `（其中 ${excludedCount} 个在熟词本中已排除）`}
-            {ignoredInvalidCount > 0 && `，已排除 ${ignoredInvalidCount} 个无效词到废词本`}
+            {excludedCount > 0 && (
+              `（其中 ${excludedMasteredCount} 个在熟词本` + 
+              (excludedIgnoredCount > 0 ? `、${excludedIgnoredCount} 个在废词本` : '') + 
+              '中已排除）'
+            )}
+            {ignoredInvalidCount > 0 && `，本次已排除 ${ignoredInvalidCount} 个无效词`}
           </span>
           <div className="flex items-center gap-4">
             <Select
