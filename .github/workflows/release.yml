@@ -4,6 +4,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -30,7 +33,7 @@ jobs:
         run: npm run build
       
       - name: Build and publish Windows installer
-        run: npm run electron:build:win
+        run: npm run electron:build:win -- --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
@@ -71,7 +74,7 @@ jobs:
         run: npm run build
       
       - name: Build and publish macOS installer
-        run: npm run electron:build:mac
+        run: npm run electron:build:mac -- --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
@@ -111,7 +114,7 @@ jobs:
         run: npm run build
       
       - name: Build and publish Linux installer
-        run: npm run electron:build:linux
+        run: npm run electron:build:linux -- --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
