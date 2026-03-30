@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Layout, Menu, Spin, message } from 'antd';
+import { Layout, Menu, Spin, message, Button } from 'antd';
 import {
   BookOutlined,
   ReadOutlined,
   SettingOutlined,
   BookFilled,
   CheckCircleOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import ReaderPage from './pages/ReaderPage';
 import WordBookPage from './pages/WordBookPage';
@@ -22,6 +24,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('bookshelf');
   const [loading, setLoading] = useState(true);
   const [pendingBookPath, setPendingBookPath] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const initializeSettings = useSettingsStore((state) => state.initialize);
 
   useEffect(() => {
@@ -124,10 +127,21 @@ function App() {
       <Sider
         width={200}
         theme="light"
+        collapsible
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        trigger={null}
         className="border-r border-gray-200"
       >
-        <div className="h-16 flex items-center justify-center border-b border-gray-200">
-          <h1 className="text-xl font-bold text-primary-600">ReadEasy</h1>
+        <div className="h-16 flex items-center justify-center border-b border-gray-200 relative">
+          {!collapsed && <h1 className="text-xl font-bold text-primary-600">ReadEasy</h1>}
+          <Button
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            className="absolute right-2"
+            style={{ color: '#666' }}
+          />
         </div>
         <Menu
           mode="inline"
