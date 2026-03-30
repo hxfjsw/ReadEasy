@@ -121,9 +121,6 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
       return;
     }
     
-    // 如果正在翻译中，跳过
-    if (isTranslatingSubtitle) return;
-    
     setIsTranslatingSubtitle(true);
     
     try {
@@ -148,11 +145,11 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
         setSubtitleTranslation(translation);
       } else {
         console.error('[SubtitleTranslate] 翻译失败:', result.message);
-        setSubtitleTranslation('翻译失败');
+        setSubtitleTranslation('翻译失败: ' + (result.message || '未知错误'));
       }
     } catch (error) {
       console.error('字幕翻译失败:', error);
-      setSubtitleTranslation('翻译失败');
+      setSubtitleTranslation('翻译失败: ' + (error as Error).message);
     } finally {
       setIsTranslatingSubtitle(false);
     }
