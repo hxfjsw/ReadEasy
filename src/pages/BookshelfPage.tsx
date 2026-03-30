@@ -378,8 +378,8 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
       const masteredWords = await window.electron.ipcRenderer.invoke('db:getMasteredWords');
       const masteredSet = new Set(masteredWords.map((w: string) => w.toLowerCase()));
       
-      // 读取文件内容
-      const fileResult = await window.electron.ipcRenderer.invoke('file:read', book.filePath);
+      // 读取文件内容（传入更大的 maxContentSize 以读取完整内容）
+      const fileResult = await window.electron.ipcRenderer.invoke('file:read', book.filePath, { maxContentSize: 100 * 1024 * 1024 });
       if (fileResult.success) {
         // 提取所有英文单词、次数和例句
         const content = fileResult.data || '';
@@ -823,8 +823,8 @@ const BookshelfPage: React.FC<BookshelfPageProps> = ({ onOpenBook }) => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-600">
-              共提取到 <strong>{extractedWords.length}</strong> 个单词
-              {excludedCount > 0 && `（已自动排除熟词本中的 ${excludedCount} 个单词）`}
+              共提取到 <strong>{extractedWords.length + excludedCount}</strong> 个单词
+              {excludedCount > 0 && `（其中 ${excludedCount} 个在熟词本中已排除）`}
               {ignoredInvalidCount > 0 && `，已排除 ${ignoredInvalidCount} 个无效词到废词本`}
             </span>
             <div className="flex items-center gap-4">
