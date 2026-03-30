@@ -145,6 +145,9 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         onTTSPause={() => tts.isPaused ? tts.startReadingAloud(file.fileContent || '') : tts.pauseReadingAloud()}
         onTTSStop={tts.stopReadingAloud}
         bookPath={file.filePath}
+        enableLazyMode={audio.enableLazyMode}
+        onToggleLazyMode={() => audio.setEnableLazyMode(!audio.enableLazyMode)}
+        isLazyTranscribing={audio.isLazyTranscribing}
       />
 
       <div className="flex flex-1 overflow-auto">

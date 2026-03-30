@@ -56,9 +56,13 @@ export function useWhisper(segmentDuration: number = 5) {
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [isGeneratingSubtitles, setIsGeneratingSubtitles] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
+  // 实时字幕生成模式
+  const [enableLazyTranscription, setEnableLazyTranscription] = useState(false);
+  const [isLazyTranscribing, setIsLazyTranscribing] = useState(false);
   const whisperPipelineRef = useRef<AutomaticSpeechRecognitionPipeline | null>(null);
   const audioSegmentsRef = useRef<AudioSegment[]>([]);
   const segmentDurationRef = useRef<number>(segmentDuration);
+  const lazyTranscribeQueueRef = useRef<Set<number>>(new Set()); // 正在实时识别的段落索引
 
   // 加载 Whisper 模型
   const loadModel = useCallback(async () => {
@@ -389,6 +393,81 @@ export function useWhisper(segmentDuration: number = 5) {
     ) || null;
   }, [subtitles]);
 
+  // 实时字幕生成：获取或生成指定时间的字幕
+  const getOrTranscribeAtTime = useCallback(async (currentTime: number): Promise<SubtitleItem | null> => {
+    // 先查已生成的字幕
+    const existingSubtitle = getSubtitleAtTime(currentTime);
+    if (existingSubtitle) {
+      return existingSubtitle;
+    }
+
+    // 找到当前时间对应的段落
+    const segment = audioSegmentsRef.current.find(
+      s => currentTime >= s.startTime && currentTime < s.endTime
+    );
+
+    if (!segment) {
+      return null;
+    }
+
+    // 如果已经在识别中，返回 null 等待
+    if (lazyTranscribeQueueRef.current.has(segment.index)) {
+      return null;
+    }
+
+    // 如果已经识别过但没有字幕（可能识别失败），不再重试
+    if (segment.transcribed) {
+      return null;
+    }
+
+    // 开始实时识别
+    lazyTranscribeQueueRef.current.add(segment.index);
+    setIsLazyTranscribing(true);
+
+    try {
+      console.log(`[Whisper] 实时识别第 ${segment.index + 1} 段 (${formatTime(segment.startTime)}-${formatTime(segment.endTime)})`);
+      
+      const text = await transcribeSegment(segment);
+      
+      // 标记为已识别
+      segment.transcribed = true;
+      segment.text = text;
+      
+      const subtitle: SubtitleItem = {
+        index: segment.index,
+        startTime: segment.startTime,
+        endTime: segment.endTime,
+        text: text,
+      };
+      
+      // 更新字幕列表
+      setSubtitles(prev => {
+        const newSubtitles = [...prev, subtitle];
+        // 按索引排序
+        newSubtitles.sort((a, b) => a.index - b.index);
+        return newSubtitles;
+      });
+      
+      setTranscriptionSegments(prev => [...prev, {
+        text,
+        startTime: segment.startTime,
+        endTime: segment.endTime,
+        index: segment.index,
+      }]);
+      
+      console.log(`[Whisper] 实时识别完成: ${text}`);
+      return subtitle;
+    } catch (error) {
+      console.error(`[Whisper] 实时识别第 ${segment.index + 1} 段失败:`, error);
+      // 标记为已识别但失败，避免重复尝试
+      segment.transcribed = true;
+      return null;
+    } finally {
+      lazyTranscribeQueueRef.current.delete(segment.index);
+      setIsLazyTranscribing(false);
+    }
+  }, [getSubtitleAtTime, transcribeSegment]);
+
   // 清理
   const resetTranscription = useCallback(() => {
     audioSegmentsRef.current = [];
@@ -411,6 +490,7 @@ export function useWhisper(segmentDuration: number = 5) {
     findMatchingSentence,
     generateAllSubtitles,
     getSubtitleAtTime,
+    getOrTranscribeAtTime,
     resetTranscription,
     transcriptionSegments,
     subtitles,
@@ -418,6 +498,9 @@ export function useWhisper(segmentDuration: number = 5) {
     generationProgress,
     isModelLoading,
     isTranscribing,
+    isLazyTranscribing,
     modelLoaded,
+    enableLazyTranscription,
+    setEnableLazyTranscription,
   };
 }

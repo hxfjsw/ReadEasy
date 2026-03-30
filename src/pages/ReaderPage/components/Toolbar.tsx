@@ -37,6 +37,10 @@ interface ToolbarProps {
   onTTSStop?: () => void;
   // 当前书籍路径（用于有声书功能）
   bookPath?: string;
+  // 实时字幕生成模式
+  enableLazyMode?: boolean;
+  onToggleLazyMode?: () => void;
+  isLazyTranscribing?: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -73,6 +77,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onTTSStart,
   onTTSPause,
   onTTSStop,
+  // 实时字幕生成模式
+  enableLazyMode = false,
+  onToggleLazyMode,
+  isLazyTranscribing = false,
 }) => {
   const bgClass = theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
   
@@ -124,6 +132,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           isGeneratingSubtitles={isGeneratingSubtitles}
           generationProgress={generationProgress}
           hasSubtitles={hasSubtitles}
+          enableLazyMode={enableLazyMode}
+          onToggleLazyMode={onToggleLazyMode}
+          isLazyTranscribing={isLazyTranscribing}
         />
         
         <Button icon={<SettingOutlined />} onClick={onSettingsClick} />
@@ -207,6 +218,10 @@ const AudioControl: React.FC<{
   isGeneratingSubtitles?: boolean;
   generationProgress?: number;
   hasSubtitles?: boolean;
+  // 实时字幕生成模式
+  enableLazyMode?: boolean;
+  onToggleLazyMode?: () => void;
+  isLazyTranscribing?: boolean;
 }> = ({ 
   audioFile, 
   isPlayingAudio, 
@@ -225,6 +240,9 @@ const AudioControl: React.FC<{
   isGeneratingSubtitles,
   generationProgress,
   hasSubtitles,
+  enableLazyMode = false,
+  onToggleLazyMode,
+  isLazyTranscribing = false,
 }) => {
   if (!audioFile) {
     return (
@@ -254,12 +272,25 @@ const AudioControl: React.FC<{
           <Progress percent={generationProgress} size="small" showInfo={false} />
         </div>
       )}
-      {isTranscribing && !isGeneratingSubtitles && (
+      {isLazyTranscribing && (
+        <Badge status="processing" text="实时识别中" />
+      )}
+      {isTranscribing && !isGeneratingSubtitles && !isLazyTranscribing && (
         <Badge status="success" text="识别中" />
       )}
       
+      {/* 实时模式切换按钮 */}
+      <Button
+        type={enableLazyMode ? "primary" : "default"}
+        size="small"
+        onClick={onToggleLazyMode}
+        title={enableLazyMode ? "实时字幕生成模式：读到哪里生成到哪里" : "预生成模式：先生成全部字幕再播放"}
+      >
+        {enableLazyMode ? "实时" : "预生成"}
+      </Button>
+      
       {/* 字幕按钮 */}
-      {!isWhisperLoading && !isGeneratingSubtitles && audioFile && (
+      {!isWhisperLoading && !isGeneratingSubtitles && !enableLazyMode && audioFile && (
         <>
           {!hasSubtitles ? (
             <Button 

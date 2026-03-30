@@ -22,6 +22,8 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [isGeneratingSubtitles, setIsGeneratingSubtitles] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
+  // 实时字幕生成模式
+  const [enableLazyMode, setEnableLazyMode] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastTranscribedSegmentRef = useRef<number>(-1);
@@ -126,11 +128,22 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
             const currentTime = audioRef.current.currentTime;
             setAudioCurrentTime(currentTime);
             
-            // 查表模式：根据当前时间获取对应字幕
-            const subtitle = whisper.getSubtitleAtTime(currentTime);
-            if (subtitle && subtitle.text && subtitle.index !== currentSubtitleRef.current?.index) {
-              currentSubtitleRef.current = subtitle;
-              handleSubtitleMatch(subtitle);
+            // 实时字幕生成模式
+            if (enableLazyMode) {
+              // 使用实时生成
+              whisper.getOrTranscribeAtTime(currentTime).then(subtitle => {
+                if (subtitle && subtitle.text && subtitle.index !== currentSubtitleRef.current?.index) {
+                  currentSubtitleRef.current = subtitle;
+                  handleSubtitleMatch(subtitle);
+                }
+              });
+            } else {
+              // 查表模式：根据当前时间获取对应字幕（预生成模式）
+              const subtitle = whisper.getSubtitleAtTime(currentTime);
+              if (subtitle && subtitle.text && subtitle.index !== currentSubtitleRef.current?.index) {
+                currentSubtitleRef.current = subtitle;
+                handleSubtitleMatch(subtitle);
+              }
             }
           }
         }, 200); // 更频繁的更新以获得更好的同步
@@ -139,7 +152,7 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
         message.error('音频播放失败');
       });
     }
-  }, [isPlayingAudio, whisper, subtitles]);
+  }, [isPlayingAudio, whisper, subtitles, enableLazyMode]);
 
   // 处理字幕匹配和高亮
   const handleSubtitleMatch = useCallback((subtitle: SubtitleItem) => {
@@ -293,6 +306,10 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
     generationProgress,
     whisperModelLoaded: whisper.modelLoaded,
     isWhisperLoading: whisper.isModelLoading,
-    isTranscribing: whisper.isTranscribing || isGeneratingSubtitles,
+    isTranscribing: whisper.isTranscribing || isGeneratingSubtitles || whisper.isLazyTranscribing,
+    // 实时字幕生成模式
+    enableLazyMode,
+    setEnableLazyMode,
+    isLazyTranscribing: whisper.isLazyTranscribing,
   };
 }
