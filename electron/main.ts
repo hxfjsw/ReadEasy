@@ -35,30 +35,35 @@ const createWindow = () => {
     mainWindow?.show();
   });
 
-  // 设置应用菜单（包含调试选项）
-  const template = [
-    {
-      label: '调试',
-      submenu: [
-        {
-          label: '打开开发者工具',
-          accelerator: 'F12',
-          click: () => {
-            mainWindow?.webContents.openDevTools();
+  // 设置应用菜单（仅在开发模式下显示调试菜单）
+  if (process.env.NODE_ENV === 'development') {
+    const template = [
+      {
+        label: '调试',
+        submenu: [
+          {
+            label: '打开开发者工具',
+            accelerator: 'F12',
+            click: () => {
+              mainWindow?.webContents.openDevTools();
+            }
+          },
+          {
+            label: '重新加载',
+            accelerator: 'CmdOrCtrl+R',
+            click: () => {
+              mainWindow?.webContents.reload();
+            }
           }
-        },
-        {
-          label: '重新加载',
-          accelerator: 'CmdOrCtrl+R',
-          click: () => {
-            mainWindow?.webContents.reload();
-          }
-        }
-      ]
-    }
-  ];
-  const menu = Menu.buildFromTemplate(template as any);
-  Menu.setApplicationMenu(menu);
+        ]
+      }
+    ];
+    const menu = Menu.buildFromTemplate(template as any);
+    Menu.setApplicationMenu(menu);
+  } else {
+    // 正式版本：移除菜单栏（或设置为空菜单）
+    Menu.setApplicationMenu(null);
+  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
