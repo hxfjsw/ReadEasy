@@ -71,6 +71,8 @@ function convertECDICTToUnifiedFormat(ecdictResult: ECDICTDefinition) {
     phoneticUk: ecdictResult.phoneticUk || ecdictResult.phoneticUs,
     definitions: parseECDICTDefinitions(ecdictResult),
     level: ecdictResult.level,
+    tag: ecdictResult.tag,
+    frq: ecdictResult.frq,
   };
 }
 

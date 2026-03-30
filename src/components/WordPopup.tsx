@@ -3,6 +3,21 @@ import { Modal, Spin, Button, Tag, message, Select } from 'antd';
 import { PlusOutlined, BookOutlined, SoundOutlined, CloseOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type { WordDefinition, WordBook, Word } from '../types';
 
+// Tag 标签映射
+const tagLabels: Record<string, string> = {
+  'zk': '中考',
+  'gk': '高考',
+  'cet4': '四级',
+  'cet6': '六级',
+  'ky': '考研',
+  'ielts': '雅思',
+  'toefl': '托福',
+  'gre': 'GRE',
+  'tem8': '专八',
+  'oxford': '牛津3000',
+  'collins': '柯林斯',
+};
+
 interface WordPopupProps {
   word: string;
   context?: string;
@@ -17,6 +32,12 @@ interface WordPopupProps {
 // 加载状态类型
 type LoadingStage = 'idle' | 'basic' | 'detailed' | 'complete';
 
+// 解析 tag 为标签数组
+const parseTags = (tagString?: string): string[] => {
+  if (!tagString) return [];
+  return tagString.split(/\s+/).filter(t => t);
+};
+
 const WordPopup: React.FC<WordPopupProps> = ({ 
   word, 
   context, 
@@ -28,7 +49,7 @@ const WordPopup: React.FC<WordPopupProps> = ({
   onMasteredStatusChange
 }) => {
   const [loadingStage, setLoadingStage] = useState<LoadingStage>('idle');
-  const [basicDef, setBasicDef] = useState<Partial<WordDefinition> | null>(null);
+  const [basicDef, setBasicDef] = useState<Partial<WordDefinition> & { tag?: string; frq?: number } | null>(null);
   const [detailedDef, setDetailedDef] = useState<Partial<WordDefinition> | null>(null);
   const [wordBooks, setWordBooks] = useState<WordBook[]>([]);
   const [selectedBookId, setSelectedBookId] = useState<number | null>(null);
@@ -355,14 +376,23 @@ const WordPopup: React.FC<WordPopupProps> = ({
   // 渲染基础定义（始终显示）
   const renderBasicDefinition = () => {
     if (!basicDef) return null;
+    
+    const tags = parseTags(basicDef.tag);
 
     return (
       <div className="border-b pb-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-2xl font-bold">{basicDef.word || word}</h2>
-          {basicDef.level && (
-            <Tag color="blue">{basicDef.level}</Tag>
+          {/* 词频标签 */}
+          {basicDef.frq && basicDef.frq > 0 && basicDef.frq <= 5000 && (
+            <Tag color="blue" className="text-xs">Frq: {basicDef.frq}</Tag>
           )}
+          {/* 等级标签（所有都显示） */}
+          {tags.map(tag => (
+            <Tag key={tag} color="green" className="text-xs">
+              {tagLabels[tag] || tag}
+            </Tag>
+          ))}
           {isMastered && (
             <Tag color="green" icon={<CheckCircleOutlined />}>熟词</Tag>
           )}
