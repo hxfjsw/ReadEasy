@@ -109,19 +109,25 @@ export class GoogleTranslationService {
    */
   private parseResponse(response: string, originalText: string): TranslationResult {
     try {
-      // Google API返回的是JSON数组，需要解析
-      // 格式: [[["翻译结果","原文",null,null,n]],null,"源语言代码"]
       console.log('[GoogleTranslate] 解析响应:', response.substring(0, 200) + '...');
       const parsed = JSON.parse(response);
       
       // 提取翻译结果
       let translatedText = '';
+      let detectedSourceLanguage = 'en';
       
-      if (Array.isArray(parsed[0])) {
-        // 拼接所有翻译片段
+      // 格式1: 新的JSON对象格式 {"sentences": [{"trans": "...", "orig": "..."}], "src": "en"}
+      if (parsed.sentences && Array.isArray(parsed.sentences)) {
+        translatedText = parsed.sentences
+          .map((item: any) => item.trans || '')
+          .filter((text: string) => text && text.trim())
+          .join('');
+        detectedSourceLanguage = parsed.src || 'en';
+      }
+      // 格式2: 旧数组格式 [[["翻译结果","原文",null,null,n]],null,"源语言代码"]
+      else if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
         translatedText = parsed[0]
           .map((item: any) => {
-            // item 应该是 ["翻译文本", "原文", ...]
             if (Array.isArray(item) && item.length > 0) {
               return item[0];
             }
@@ -129,24 +135,17 @@ export class GoogleTranslationService {
           })
           .filter((text: string) => text && text.trim())
           .join('');
+        detectedSourceLanguage = parsed[2] || 'en';
       }
-
-      // 检测到的源语言
-      const detectedSourceLanguage = parsed[2] || 'en';
-      
-      // 置信度（如果有）
-      const confidence = parsed[6] || undefined;
 
       console.log('[GoogleTranslate] 提取翻译:', { translatedText: translatedText.substring(0, 50), detectedSourceLanguage });
 
       return {
         translatedText: translatedText || originalText,
         detectedSourceLanguage,
-        confidence,
       };
     } catch (error) {
       console.error('Failed to parse translation response:', error);
-      // 如果解析失败，返回原文
       return { translatedText: originalText };
     }
   }
