@@ -522,6 +522,51 @@ export function registerIPCHandlers(
     const win = BrowserWindow.getFocusedWindow();
     win?.close();
   });
+
+  // 音频文件管理
+  ipcMain.handle('audio:getByBook', async (_, bookPath: string) => {
+    console.log('[IPC] audio:getByBook called:', bookPath);
+    try {
+      const files = dbService.getAudioFilesByBook(bookPath);
+      return { success: true, data: files };
+    } catch (error: any) {
+      console.error('[IPC] audio:getByBook error:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
+  ipcMain.handle('audio:add', async (_, data: { bookPath: string; audioPath: string; audioName: string; duration?: number }) => {
+    console.log('[IPC] audio:add called:', data.audioName);
+    try {
+      const id = dbService.addAudioFile(data);
+      return { success: true, id };
+    } catch (error: any) {
+      console.error('[IPC] audio:add error:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
+  ipcMain.handle('audio:delete', async (_, id: number) => {
+    console.log('[IPC] audio:delete called:', id);
+    try {
+      dbService.deleteAudioFile(id);
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC] audio:delete error:', error);
+      return { success: false, message: error.message };
+    }
+  });
+
+  ipcMain.handle('audio:updateLastUsed', async (_, id: number) => {
+    console.log('[IPC] audio:updateLastUsed called:', id);
+    try {
+      dbService.updateAudioFileLastUsed(id);
+      return { success: true };
+    } catch (error: any) {
+      console.error('[IPC] audio:updateLastUsed error:', error);
+      return { success: false, message: error.message };
+    }
+  });
   
   console.log('[IPC] All IPC handlers registered');
 }

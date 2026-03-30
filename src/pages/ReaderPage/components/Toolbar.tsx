@@ -15,7 +15,7 @@ interface ToolbarProps {
   loadingState: LoadingState;
   onFileSelect: () => void;
   onChapterClick: () => void;
-  onAudioSelect: () => void;
+  onAudioSelect: () => void; // 现在打开音频选择 Modal
   onAudioToggle: () => void;
   onAudioSeek: (value: number) => void;
   onAudioClose: () => void;
@@ -35,6 +35,8 @@ interface ToolbarProps {
   onTTSStart?: () => void;
   onTTSPause?: () => void;
   onTTSStop?: () => void;
+  // 当前书籍路径（用于有声书功能）
+  bookPath?: string;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({

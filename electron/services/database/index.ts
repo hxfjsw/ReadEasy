@@ -143,12 +143,26 @@ export class DatabaseService {
       )
     `);
 
+    // 电子书音频文件关联表 - 一个电子书可以对应多个音频文件
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS book_audio_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_path TEXT NOT NULL,
+        audio_path TEXT NOT NULL UNIQUE,
+        audio_name TEXT NOT NULL,
+        duration REAL,
+        added_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        last_used_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )
+    `);
+
     // 创建索引
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_words_word ON words(word)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_words_level ON words(level)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_word_book_items_book_id ON word_book_items(word_book_id)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_reading_records_path ON reading_records(file_path)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_mastered_words_word ON mastered_words(word)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_book_audio_files_book_path ON book_audio_files(book_path)`);
 
     // 迁移：为 word_book_items 添加复习相关字段
     this.migrateWordBookItems();
@@ -726,5 +740,54 @@ export class DatabaseService {
   // 关闭数据库
   close(): void {
     this.db.close();
+  }
+
+  // ============ 音频文件管理 ============
+
+  // 获取书籍的所有音频文件
+  getAudioFilesByBook(bookPath: string): schema.BookAudioFile[] {
+    const rows = this.db.prepare(`
+      SELECT * FROM book_audio_files 
+      WHERE book_path = ? 
+      ORDER BY added_at DESC
+    `).all(bookPath) as any[];
+
+    return rows.map(row => ({
+      id: row.id,
+      bookPath: row.book_path,
+      audioPath: row.audio_path,
+      audioName: row.audio_name,
+      duration: row.duration,
+      addedAt: new Date(row.added_at * 1000),
+      lastUsedAt: new Date(row.last_used_at * 1000),
+    }));
+  }
+
+  // 添加音频文件
+  addAudioFile(data: { bookPath: string; audioPath: string; audioName: string; duration?: number }): number {
+    const result = this.db.prepare(`
+      INSERT INTO book_audio_files (book_path, audio_path, audio_name, duration, added_at, last_used_at)
+      VALUES (?, ?, ?, ?, unixepoch(), unixepoch())
+      ON CONFLICT(audio_path) DO UPDATE SET 
+        book_path = excluded.book_path,
+        audio_name = excluded.audio_name,
+        last_used_at = unixepoch()
+    `).run(data.bookPath, data.audioPath, data.audioName, data.duration || null);
+
+    return Number(result.lastInsertRowid);
+  }
+
+  // 删除音频文件
+  deleteAudioFile(id: number): void {
+    this.db.prepare('DELETE FROM book_audio_files WHERE id = ?').run(id);
+  }
+
+  // 更新最后使用时间
+  updateAudioFileLastUsed(id: number): void {
+    this.db.prepare(`
+      UPDATE book_audio_files 
+      SET last_used_at = unixepoch() 
+      WHERE id = ?
+    `).run(id);
   }
 }

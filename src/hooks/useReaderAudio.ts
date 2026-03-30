@@ -31,22 +31,32 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
   const whisper = useWhisper(segmentDuration);
 
   // 选择音频文件
-  const handleSelectAudio = useCallback(async () => {
+  const handleSelectAudio = useCallback(async (filePath?: string) => {
     try {
-      const result = await window.electron.ipcRenderer.invoke('file:open', {
-        filters: [
-          { name: 'Audio Files', extensions: ['mp3', 'wav', 'm4a', 'aac'] },
-          { name: 'MP3', extensions: ['mp3'] },
-          { name: 'All Files', extensions: ['*'] },
-        ]
-      });
-      if (!result.canceled && result.filePaths.length > 0) {
-        const path = result.filePaths[0];
-        if (!path.toLowerCase().endsWith('.mp3')) {
-          message.error('请选择 MP3 格式的音频文件');
+      let path = filePath;
+      
+      // 如果没有提供路径，打开文件选择对话框
+      if (!path) {
+        const result = await window.electron.ipcRenderer.invoke('file:open', {
+          filters: [
+            { name: 'Audio Files', extensions: ['mp3', 'wav', 'm4a', 'aac'] },
+            { name: 'MP3', extensions: ['mp3'] },
+            { name: 'All Files', extensions: ['*'] },
+          ]
+        });
+        if (result.canceled || result.filePaths.length === 0) {
           return;
         }
-        setAudioFile(path);
+        path = result.filePaths[0];
+      }
+      
+      if (!path) return;
+      
+      if (!path.toLowerCase().endsWith('.mp3')) {
+        message.error('请选择 MP3 格式的音频文件');
+        return;
+      }
+      setAudioFile(path);
         
         // 创建音频对象
         if (audioRef.current) {
@@ -87,7 +97,6 @@ export function useReaderAudio(segmentDuration: number = 5, similarityThreshold:
         }
         
         message.success('有声书已加载，请生成字幕');
-      }
     } catch (error) {
       console.error('选择音频文件失败:', error);
       message.error('选择音频文件失败');

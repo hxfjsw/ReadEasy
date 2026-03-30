@@ -16,6 +16,7 @@ import { ChapterDrawer } from './components/ChapterDrawer';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { WordPopupSidebar } from './components/WordPopupSidebar';
 import { SubtitleModal } from './components/SubtitleModal';
+import { AudioSelectorModal } from './components/AudioSelectorModal';
 
 // 导出 HighlightedSentence 类型
 export type { HighlightedSentence } from '../../hooks/useReaderAudio';
@@ -36,6 +37,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
 
   const [chapterDrawerOpen, setChapterDrawerOpen] = useState(false);
   const [subtitleModalOpen, setSubtitleModalOpen] = useState(false);
+  const [audioSelectorOpen, setAudioSelectorOpen] = useState(false);
 
   
   const [selectedWord, setSelectedWord] = useState('');
@@ -122,7 +124,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         loadingState={file.loadingState}
         onFileSelect={file.handleFileSelect}
         onChapterClick={() => setChapterDrawerOpen(true)}
-        onAudioSelect={audio.handleSelectAudio}
+        onAudioSelect={() => setAudioSelectorOpen(true)}
         onAudioToggle={audio.toggleAudioPlayback}
         onAudioSeek={audio.handleAudioSeek}
         onAudioClose={audio.closeAudio}
@@ -142,6 +144,7 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         onTTSStart={() => file.fileContent && tts.startReadingAloud(file.fileContent)}
         onTTSPause={() => tts.isPaused ? tts.startReadingAloud(file.fileContent || '') : tts.pauseReadingAloud()}
         onTTSStop={tts.stopReadingAloud}
+        bookPath={file.filePath}
       />
 
       <div className="flex flex-1 overflow-auto">
@@ -229,6 +232,17 @@ const ReaderPage: React.FC<ReaderPageProps> = ({ initialFilePath, onClearInitial
         currentTime={audio.audioCurrentTime}
         onClose={() => setSubtitleModalOpen(false)}
         onGenerate={audio.generateSubtitles}
+      />
+
+      <AudioSelectorModal
+        open={audioSelectorOpen}
+        bookPath={file.filePath}
+        bookName={file.bookName}
+        onClose={() => setAudioSelectorOpen(false)}
+        onSelect={(audioPath) => {
+          // 使用已有的 handleSelectAudio 逻辑
+          audio.handleSelectAudio(audioPath);
+        }}
       />
     </div>
   );

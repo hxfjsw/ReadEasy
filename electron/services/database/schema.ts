@@ -93,6 +93,17 @@ export const masteredWords = sqliteTable('mastered_words', {
   addedAt: integer('added_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 
+// 电子书音频文件关联表 - 一个电子书可以对应多个音频文件
+export const bookAudioFiles = sqliteTable('book_audio_files', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  bookPath: text('book_path').notNull(), // 电子书文件路径
+  audioPath: text('audio_path').notNull().unique(), // 音频文件路径
+  audioName: text('audio_name').notNull(), // 音频文件名（用于显示）
+  duration: real('duration'), // 音频时长（秒）
+  addedAt: integer('added_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  lastUsedAt: integer('last_used_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+});
+
 // 导出类型
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -110,3 +121,5 @@ export type Setting = typeof settings.$inferSelect;
 export type NewSetting = typeof settings.$inferInsert;
 export type MasteredWord = typeof masteredWords.$inferSelect;
 export type NewMasteredWord = typeof masteredWords.$inferInsert;
+export type BookAudioFile = typeof bookAudioFiles.$inferSelect;
+export type NewBookAudioFile = typeof bookAudioFiles.$inferInsert;

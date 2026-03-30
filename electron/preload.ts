@@ -47,6 +47,12 @@ export interface IPCChannels {
   'db:getSetting': (key: string) => Promise<any>;
   'db:setSetting': (key: string, value: string) => Promise<boolean>;
   
+  // 音频文件管理
+  'audio:getByBook': (bookPath: string) => Promise<{ success: boolean; data?: any[]; message?: string }>;
+  'audio:add': (data: { bookPath: string; audioPath: string; audioName: string; duration?: number }) => Promise<{ success: boolean; id?: number; message?: string }>;
+  'audio:delete': (id: number) => Promise<{ success: boolean; message?: string }>;
+  'audio:updateLastUsed': (id: number) => Promise<{ success: boolean; message?: string }>;
+  
   // AI服务
   'ai:testConnection': (config: any) => Promise<{ success: boolean; message: string }>;
   'ai:defineWord': (params: { word: string; context?: string; configId?: number }) => Promise<any>;
