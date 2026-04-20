@@ -40,13 +40,13 @@ const isRepeatedChar = (word: string): boolean => {
 const lemmatizeWord = (word: string): string => {
   const verbForm = verb(word);
   if (verbForm !== word) return verbForm;
-  
+
   const nounForm = noun(word);
   if (nounForm !== word) return nounForm;
-  
+
   const adjForm = adjective(word);
   if (adjForm !== word) return adjForm;
-  
+
   return word;
 };
 
@@ -97,8 +97,8 @@ export class WordExtractionService {
     const ignoredCount = allWords.filter(item => ignoredSet.has(item.word.toLowerCase())).length;
 
     // 5. 过滤
-    const filteredWords = allWords.filter(item => 
-      !masteredSet.has(item.word.toLowerCase()) && 
+    const filteredWords = allWords.filter(item =>
+      !masteredSet.has(item.word.toLowerCase()) &&
       !ignoredSet.has(item.word.toLowerCase())
     );
 
@@ -127,7 +127,7 @@ export class WordExtractionService {
     // 1. ECDICT 批量查询
     const wordList = words.map(w => w.word.toLowerCase());
     const ecdictResult = this.ecdictService.batchLookup(wordList);
-    
+
     for (let i = 0; i < updatedWords.length; i++) {
       const word = updatedWords[i].word.toLowerCase();
       const entry = ecdictResult.get(word);
@@ -172,12 +172,12 @@ export class WordExtractionService {
    * 排除无效词（ECDICT 中找不到的词）
    */
   async ignoreInvalidWords(
-    words: ExtractedWord[], 
+    words: ExtractedWord[],
     source?: string
   ): Promise<{ validWords: ExtractedWord[]; ignoredCount: number }> {
     const wordList = words.map(w => w.word.toLowerCase());
     const ecdictResult = this.ecdictService.batchLookup(wordList);
-    
+
     const foundWords = new Set<string>();
     ecdictResult.forEach((value, key) => {
       if (value.definitionCn) {
@@ -186,14 +186,14 @@ export class WordExtractionService {
     });
 
     const invalidWords = words.filter(w => !foundWords.has(w.word.toLowerCase()));
-    
+
     if (invalidWords.length > 0) {
       const invalidWordStrings = invalidWords.map(w => w.word);
       this.dbService.batchAddIgnoredWords(invalidWordStrings, source);
     }
 
     const validWords = words.filter(w => foundWords.has(w.word.toLowerCase()));
-    
+
     return {
       validWords,
       ignoredCount: invalidWords.length,
@@ -206,7 +206,7 @@ export class WordExtractionService {
   private async readFile(filePath: string): Promise<{ success: boolean; content?: string; error?: string }> {
     try {
       const ext = filePath.split('.').pop()?.toLowerCase();
-      
+
       if (ext === 'epub') {
         const book = await this.parserService.parseEpub(filePath, { maxContentSize: 100 * 1024 * 1024 });
         return { success: true, content: book.content };
@@ -227,17 +227,17 @@ export class WordExtractionService {
    */
   private extractWordsFromText(text: string): Map<string, { count: number; example?: string }> {
     const wordData = new Map<string, { count: number; example?: string }>();
-    
+
     const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
     const matches = text.match(/[a-zA-Z]{4,}/g);
-    
+
     if (matches) {
       for (const word of matches) {
         const lowerWord = word.toLowerCase();
         // 过滤纯重复字母和常见无意义组合，且长度在4-20之间
         if (!isRepeatedChar(lowerWord) && lowerWord.length >= 4 && lowerWord.length <= 20) {
           const lemma = lemmatizeWord(lowerWord);
-          
+
           const existing = wordData.get(lemma);
           if (existing) {
             existing.count++;
@@ -246,8 +246,8 @@ export class WordExtractionService {
             for (const sentence of sentences) {
               if (sentence.toLowerCase().includes(lowerWord)) {
                 example = sentence.trim().replace(/\s+/g, ' ');
-                if (example.length > 120) {
-                  example = example.slice(0, 120) + '...';
+                if (example.length > 350) {
+                  example = example.slice(0, 350) + '...';
                 }
                 break;
               }
@@ -266,7 +266,7 @@ export class WordExtractionService {
   private async loadDefinitionsFromECDICT(words: ExtractedWord[]): Promise<void> {
     const wordList = words.map(w => w.word.toLowerCase());
     const ecdictResult = this.ecdictService.batchLookup(wordList);
-    
+
     for (let i = 0; i < words.length; i++) {
       const word = words[i].word.toLowerCase();
       const entry = ecdictResult.get(word);
