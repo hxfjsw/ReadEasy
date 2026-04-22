@@ -20,4 +20,5 @@ export interface ExtractedWord {
   count: number;
   example?: string;
   definitionCn?: string;
+  phoneticUs?: string;
 }

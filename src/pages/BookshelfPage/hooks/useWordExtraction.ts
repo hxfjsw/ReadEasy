@@ -34,12 +34,12 @@ export const useWordExtraction = (selectedBook: BookshelfItem | null) => {
             // 查询本地数据库
             const wordFromDB = await window.electron.ipcRenderer.invoke('db:getWord', item.word.toLowerCase());
             if (wordFromDB?.definitionCn) {
-              return { word: item.word, definitionCn: wordFromDB.definitionCn };
+              return { word: item.word, definitionCn: wordFromDB.definitionCn, phoneticUs: wordFromDB.phoneticUs };
             }
             // 查询 AI
             const result = await window.electron.ipcRenderer.invoke('ai:defineWordBasic', { word: item.word });
             if (result?.success && result.data?.definitions?.[0]?.meaningCn) {
-              return { word: item.word, definitionCn: result.data.definitions[0].meaningCn };
+              return { word: item.word, definitionCn: result.data.definitions[0].meaningCn, phoneticUs: result.data.phoneticUs };
             }
             return null;
           } catch {

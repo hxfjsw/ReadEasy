@@ -166,6 +166,17 @@ export const WordExtractModal: React.FC<WordExtractModalProps> = ({
                   ),
                 },
                 {
+                  title: '音标',
+                  dataIndex: 'phoneticUs',
+                  key: 'phoneticUs',
+                  width: 120,
+                  render: (phoneticUs: string | undefined) => (
+                    <span className="text-gray-500 text-sm">
+                      {phoneticUs ? `/${phoneticUs}/` : '-'}
+                    </span>
+                  ),
+                },
+                {
                   title: '中文释义',
                   dataIndex: 'definitionCn',
                   key: 'definitionCn',
